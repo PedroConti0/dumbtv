@@ -49,7 +49,7 @@ Undo: `./launcher/install.sh --undo` gives HOME back to Amazon's launcher.
 | Hold OK, or ☰ Menu | Move, Rename, Icon (with an icon pack chosen), Hide, App info |
 | With Child lock on: hold ☰ Menu for 3 s | Options |
 | Move mode | ◀ ▶ moves the tile, ▲ ▼ moves it a line in the grid, any other key drops it |
-| Up from the top row | Options and Settings |
+| Up from the top row | Home menu |
 | Back on the home screen | jump to the first tile |
 | On an input: Back | back to the home screen |
 | On an input: ☰ Menu | show the input's name again |
@@ -77,7 +77,6 @@ settings; pressing Power on the remote still turns the TV off.
 | Tiles | small, medium, large |
 | Layout | rows, or a grid that wraps to as many columns as fit |
 | App order | your order, or recently used: the apps row re-sorts on each return home, newest first. It counts apps opened from dumbtv home, plus apps opened any other way (voice, another app) on Fire OS 6, where the launcher already has usage access. Apps never opened keep your order after the rest |
-| All apps section | hidden (default), shown: a separate alphabetical list of every launchable app below your pinned apps. Child lock hides this section |
 | App names | on focus, always, never |
 | Clock | system, 24-hour, 12-hour |
 | Memory meter | hidden, shown: free memory under the date, with a bar of what is in use; amber, with "running low", when Android reports low memory or under 15% is free. It only shows the numbers: it closes and frees nothing, and needs no permission |
@@ -85,9 +84,8 @@ settings; pressing Power on the remote still turns the TV off.
 | Open inputs with | Automatic, the TV's app, dumbtv home (see below) |
 | Background | black, graphite, midnight, image, adaptive, adaptive tint |
 | Image dim, wallpaper rotation | for image backgrounds |
-| Child lock | off, on: hides Options and Settings and turns off Hold OK and ☰ Menu on tiles, so the home screen only opens apps and inputs (see below) |
+| Child lock | off, on: hides the home menu and turns off Hold OK and ☰ Menu on tiles, so the home screen only opens apps and inputs (see below) |
 | App tile style | original (default), Afterglow, or Icon shelf: rounded app icons, always-visible titles, generous breathing room and a blue focus outline |
-| Chip style | text (default), icons: Options and Settings become round icon buttons whose knobs and gear hub take the accent color; the name shows next to the icon while it has the focus |
 | Library banner | shown (default), hidden. It only appears once a library folder holds titles (see below) |
 | Icon pack | off, or an installed icon pack; reads "None installed" until one is ([Icon packs](#icon-packs)) |
 
@@ -95,13 +93,12 @@ Below them: Next wallpaper, which apps and inputs appear on the home screen, a
 reset for order, names, picked icons and hidden tiles, and **Open Amazon's home screen**. Apps
 without a TV banner, like the Appstore, start hidden; tick them to add them.
 
-**All apps** is optional. Turn on Options › All apps section to keep the current
-Apps section as **Pinned apps** and add **All apps** below it, in either rows or
-grid layout. The full list includes unpinned apps and apps without TV banners;
-apps with no launcher entry are not listed. Hold OK or press Menu on an app there
-to Pin or Unpin it, Rename it, or open App info. The full list stays alphabetical;
-your custom or recently-used order applies to pinned apps only. Options › Apps on
-home screen still selects those pins. Turning the section off preserves them.
+The hamburger menu opens Options, Settings, and a scrollable alphabetical list of
+all launchable apps with their icons. Selecting an app launches it. The home screen
+shows only pinned apps; long-press an app in the panel to Pin or Unpin it, Rename it,
+or open App info. Apps without a TV banner are included; apps with no launcher entry
+are not listed. Your custom or recently-used order applies to pinned apps only.
+Options › Apps on home screen still selects those pins.
 
 Up and down move between nonempty sections and remember a separate focused tile
 in each. Back and HOME return to the first pinned app, or the first app in All
@@ -117,11 +114,14 @@ needed. Missing icons still leave the name visible. Switching back to Original
 restores the normal banners and App names behavior. Background and layout remain
 separate choices.
 
-**Icon shelf** uses each installed app's own icon in a rounded square card, with its
-name always shown below. The app row uses generous gaps and softer section headings;
-a blue outline and slight scale change mark the focused app. Pair it with the Midnight
-background for an Apple TV-inspired feel. Select it in Options or set
-`tile_style=shelf` in `home.conf`. It uses no Apple artwork or downloaded assets.
+**Icon shelf** uses each installed app's own rounded icon directly on the home canvas,
+with its name centered below. It shows at most three app icons across, leaving an open
+area on the right; more apps remain reachable by scrolling. A blue outline and slight
+scale change mark the focused icon. A hamburger button opens Options, Settings, and
+Apps › All apps in a frosted side panel. Pair it with the Midnight background for an
+Apple TV-inspired feel. Select it
+in Options or set `tile_style=shelf` in `home.conf`. It uses no Apple artwork or
+downloaded assets.
 
 | Grid layout | Adaptive background | Adaptive tint |
 |---|---|---|
@@ -143,7 +143,7 @@ background for an Apple TV-inspired feel. Select it in Options or set
 
 ## Child lock
 
-For a TV children use. **Options › Child lock › On** hides the Options and Settings
+For a TV children use. **Options › Child lock › On** hides the home menu
 buttons and turns off Hold OK and ☰ Menu on tiles, so nobody can move, rename or hide
 a tile, or reach App info, from the home screen. Apps and inputs open as usual.
 
@@ -228,8 +228,6 @@ tiles=medium
 layout=rows
 # custom recent (recent = newest first; the history stays in the app's private storage)
 order=custom
-# off on (Child lock hides this section)
-all_apps=off
 # focus always never
 labels=focus
 # auto 24h 12h

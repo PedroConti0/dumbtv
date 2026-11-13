@@ -3,6 +3,8 @@ package tv.dumbtv.home;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -21,6 +23,9 @@ final class Ui {
     static final int HOME_CARD_BOTTOM = 0xFF111724;
     static final int HOME_SECONDARY = 0xFFB5C0D0;
     static final int HOME_ACCENT = 0xFF3D8BFF;
+    static final int CLOCK_START = 0xFFF7FAFF;
+    static final int CLOCK_END = 0xFFBBD2FF;
+    static final int CLOCK_DATE = 0xFFCBD5E5;
     static final int DIALOG = android.R.style.Theme_DeviceDefault_Dialog_Alert;
     static final Typeface LIGHT = Typeface.create("sans-serif-light", Typeface.NORMAL);
     static final Typeface MEDIUM = Typeface.create("sans-serif-medium", Typeface.NORMAL);
@@ -51,11 +56,65 @@ final class Ui {
         return v;
     }
 
+    /** Oversized, tabular clock numerals with a restrained cool highlight on the dark shelf. */
+    static final class TimeTextView extends TextView {
+        private boolean signature;
+
+        TimeTextView(Context c) {
+            super(c);
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 80);
+            setTextScaleX(0.86f);
+            setTextColor(CLOCK_START);
+            setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+            setIncludeFontPadding(false);
+            setLetterSpacing(0.005f);
+            setFontFeatureSettings("'tnum'");
+        }
+
+        void setSignature(boolean enabled) {
+            signature = enabled;
+            updateShader();
+        }
+
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            updateShader();
+        }
+
+        private void updateShader() {
+            getPaint().setShader(signature && getWidth() > 1
+                    ? new LinearGradient(0, 0, getWidth(), 0, CLOCK_START, CLOCK_END, Shader.TileMode.CLAMP)
+                    : null);
+            invalidate();
+        }
+    }
+
     static GradientDrawable round(int color, float radius) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
         d.setCornerRadius(radius);
         return d;
+    }
+
+    /** Translucent functional chrome for the paired header controls. */
+    static GradientDrawable frostedPanel(Context c, float radius) {
+        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] {0xF02A303A, 0xF0181C24});
+        d.setCornerRadius(dp(c, radius));
+        d.setStroke(dp(c, 1), 0x48FFFFFF);
+        return d;
+    }
+
+    /** Menu rows are quiet until focused or hovered, then invert for clear contrast. */
+    static void menuFocusStyle(TextView v, float radius) {
+        StateListDrawable bg = new StateListDrawable();
+        bg.addState(new int[] {android.R.attr.state_focused}, round(Color.WHITE, radius));
+        bg.addState(new int[] {android.R.attr.state_hovered}, round(Color.WHITE, radius));
+        bg.addState(new int[0], round(Color.TRANSPARENT, radius));
+        v.setBackground(bg);
+        v.setTextColor(new ColorStateList(new int[][] {
+                {android.R.attr.state_focused}, {android.R.attr.state_hovered}, {}
+        }, new int[] {0xFF111318, 0xFF111318, Color.WHITE}));
     }
 
     /** Accent fill when focused, a faint fill otherwise. */
@@ -81,5 +140,9 @@ final class Ui {
 
     private static ColorStateList focused(int on, int off) {
         return new ColorStateList(new int[][] {{android.R.attr.state_focused}, {}}, new int[] {on, off});
+    }
+
+    static ColorStateList focusedColor(int accent, int off) {
+        return focused(ink(accent), off);
     }
 }

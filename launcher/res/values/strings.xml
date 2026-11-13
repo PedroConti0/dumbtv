@@ -6,11 +6,11 @@
     <string name="guard_description">Sends the HOME button to the dumbtv home screen instead of Amazon\'s. It reads no screen content and has no internet access.</string>
 
     <!-- Home screen -->
+    <string name="home_menu">Home menu</string>
     <string name="options">Options</string>
     <string name="settings">Settings</string>
     <string name="row_apps">Apps</string>
     <string name="row_inputs">Inputs</string>
-    <string name="row_all_apps">All apps</string>
     <string name="row_pinned_apps">Pinned apps</string>
     <string name="could_not_open">Could not open that</string>
     <string name="tile_move">Move</string>
@@ -59,7 +59,7 @@
     <string name="reset_title">Reset the home screen layout?</string>
     <string name="reset_message">Order, names, picked icons and hidden tiles go back to default. Colors and sizes stay.</string>
     <string name="reset">Reset</string>
-    <string name="lock_on">Options and Settings are hidden on the home screen now. Hold ☰ Menu for %1$d seconds to come back here.</string>
+    <string name="lock_on">The home menu is hidden now. Hold ☰ Menu for %1$d seconds to come back here.</string>
     <string name="about">Settings file: %1$s\nOne wallpaper: name it exactly wallpaper.jpg (or .png) and put it in that folder\nSeveral wallpapers: put them in %2$s/ with any names, and pick a rotation\nThen pick Background › Image file or Adaptive wallpaper tint. No permission is needed\nOn Fire OS 8 adb cannot reach that folder; use %3$s instead (Export settings puts a copy there)\nAdaptive wallpaper tint shows graphite until you add a wallpaper\nLibrary banner: put pictures and %4$s in %5$s/ in that folder\nIcon pack: install one, then pick it above; hold OK on a tile › Icon to pick one app\'s icon\nNo internet permission. No tracking, no ads, no accounts.</string>
 
     <string name="icon_for">Icon for %1$s</string>
@@ -134,12 +134,6 @@
     <string name="choice_tile_style_original">Original</string>
     <string name="choice_tile_style_afterglow">Afterglow</string>
     <string name="choice_tile_style_shelf">Icon shelf</string>
-    <string name="choice_chips">Chip style</string>
-    <string name="choice_chips_text">Text</string>
-    <string name="choice_chips_icons">Icons</string>
-    <string name="choice_all_apps">All apps section</string>
-    <string name="choice_all_apps_off">Hidden</string>
-    <string name="choice_all_apps_on">Shown</string>
     <string name="choice_icon_pack">Icon pack</string>
     <string name="icon_pack_off">Off</string>
     <string name="icon_pack_none">None installed</string>

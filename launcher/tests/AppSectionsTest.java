@@ -32,14 +32,13 @@ public final class AppSectionsTest {
             Config cfg = ConfigTest.open(dir, null);
             Item a = app("alpha", true), b = app("beta", true), c = app("gamma", false);
             List<Item> catalog = Arrays.asList(a, b, c);
-            check("off".equals(cfg.get(Config.ALL_APPS)), "all apps off by default");
-            check(Arrays.asList(Config.CHOICES).contains(Config.ALL_APPS), "available in Options");
+            check(!Arrays.stream(Config.CHOICES).anyMatch(c -> c.key.equals("all_apps")),
+                    "all apps is available from the home menu, not an Options section");
             ids(Catalog.visible(cfg, Catalog.APPS, catalog), "alpha", "beta");
-            ids(Catalog.visible(cfg, Catalog.ALL_APPS, catalog));
+            ids(Catalog.visible(cfg, Catalog.ALL_APPS, catalog), "alpha", "beta", "gamma");
 
             Catalog.setShown(cfg, Catalog.APPS, b, false);
             cfg.setList("apps.order", Arrays.asList("gamma", "alpha"));
-            cfg.set("all_apps", "on");
             ids(Catalog.visible(cfg, Catalog.ALL_APPS, catalog), "alpha", "beta", "gamma");
 
             cfg.set("name.alpha", "Zeta");
@@ -66,11 +65,11 @@ public final class AppSectionsTest {
             ids(Catalog.visible(cfg, Catalog.APPS, catalog), "alpha", "beta");
             cfg.set("lock", "off");
             ids(Catalog.visible(cfg, Catalog.ALL_APPS, catalog), "alpha", "beta", "gamma");
-            cfg.set("all_apps", "off");
-            ids(Catalog.visible(cfg, Catalog.ALL_APPS, catalog));
+            cfg.set("all_apps", "off"); // legacy setting no longer hides the menu catalog
+            ids(Catalog.visible(cfg, Catalog.ALL_APPS, catalog), "alpha", "beta", "gamma");
             Config reloaded = ConfigTest.open(dir, null);
             ids(Catalog.visible(reloaded, Catalog.APPS, catalog), "alpha", "beta");
-            ids(Catalog.visible(reloaded, Catalog.ALL_APPS, catalog));
+            ids(Catalog.visible(reloaded, Catalog.ALL_APPS, catalog), "alpha", "beta", "gamma");
             ids(catalog, "alpha", "beta", "gamma");
             ids(Catalog.visible(cfg, Catalog.INPUTS, Arrays.asList(c)), "gamma");
             check(Catalog.isApp(Catalog.ALL_APPS) && !Catalog.isApp(Catalog.INPUTS), "tile types");

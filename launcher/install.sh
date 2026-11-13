@@ -16,7 +16,8 @@ GUARD=$PKG/$PKG.Guard
 OLD_GUARD=com.spocky.projengmenu/com.spocky.projengmenu.services.ProjectivyAccessibilityService
 ADB=${ADB:-adb}
 
-adb_() { "$ADB" ${ADB_SERIAL:+-s "$ADB_SERIAL"} "$@"; }
+# MSYS2 otherwise rewrites adb shell paths (for example /sdcard/...) into local Windows paths.
+adb_() { MSYS_NO_PATHCONV=1 "$ADB" ${ADB_SERIAL:+-s "$ADB_SERIAL"} "$@"; }
 sh_() { adb_ shell "$@" </dev/null; }
 installed() { sh_ pm path "$1" 2>/dev/null | grep -q '^package:'; }
 # shellcheck disable=SC1091

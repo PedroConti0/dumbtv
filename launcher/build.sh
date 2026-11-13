@@ -14,8 +14,17 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 # shellcheck disable=SC1091
 source version.env
 MIN_SDK=${MIN_SDK:-25}
+WINDOWS=0
+case $(uname -s) in MINGW*|MSYS*|CYGWIN*) WINDOWS=1 ;; esac
 
 SDK=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
+if [[ $WINDOWS == 1 && $SDK =~ ^[A-Za-z]: ]]; then SDK=$(cygpath -u "$SDK"); fi
+if [[ -z $SDK ]]; then
+  if [[ $WINDOWS == 1 && -n ${LOCALAPPDATA:-} ]]; then
+    d=$(cygpath -u "$LOCALAPPDATA/Android/Sdk")
+    [[ -f $d/platforms/android-$MIN_SDK/android.jar ]] && SDK=$d
+  fi
+fi
 if [[ -z $SDK ]]; then
   for d in /opt/homebrew/share/android-commandlinetools "$HOME/Library/Android/sdk"; do
     if [[ -f $d/platforms/android-$MIN_SDK/android.jar ]]; then SDK=$d; break; fi
@@ -27,8 +36,14 @@ BT=$(find "$SDK/build-tools" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort 
 [[ -x $BT/aapt2 ]] || { echo "error: no build-tools in $SDK — sdkmanager 'build-tools;34.0.0'" >&2; exit 1; }
 
 JDK17_PATHS=(/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home /usr/lib/jvm/java-17-openjdk)
+if [[ $WINDOWS == 1 ]]; then
+  for j in /c/Program\ Files/Eclipse\ Adoptium/jdk-17* /c/Program\ Files/Java/jdk-17*; do
+    [[ -x $j/bin/javac.exe ]] && JDK17_PATHS+=("$j")
+  done
+fi
 javac_major() { "$1/bin/javac" -version 2>&1 | sed -n 's/^javac \([0-9]*\).*/\1/p'; }
 
+if [[ $WINDOWS == 1 && ${JAVA_HOME:-} =~ ^[A-Za-z]: ]]; then JAVA_HOME=$(cygpath -u "$JAVA_HOME"); fi
 if [[ -z ${JAVA_HOME:-} || ! -x ${JAVA_HOME:-}/bin/javac ]]; then
   for j in "${JDK17_PATHS[@]}" /opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home \
            "$(/usr/libexec/java_home 2>/dev/null || true)"; do
@@ -70,17 +85,41 @@ mkdir -p "$WORK/gen" "$WORK/classes" build
   --java "$WORK/gen" -o "$WORK/app.apk"
 
 find src "$WORK/gen" -name '*.java' > "$WORK/sources.txt"
+if [[ $WINDOWS == 1 ]]; then
+  # javac reads @files itself, so Git Bash cannot translate their POSIX paths.
+  while IFS= read -r path; do printf '"%s"\n' "$(cygpath -am "$path")"; done \
+    < "$WORK/sources.txt" > "$WORK/sources.windows.txt"
+  SOURCES="$WORK/sources.windows.txt"
+else
+  SOURCES="$WORK/sources.txt"
+fi
 "$JAVA_HOME/bin/javac" --release 8 -Xlint:all -Xlint:-options -Werror -encoding UTF-8 \
-  -classpath "$JAR" -d "$WORK/classes" @"$WORK/sources.txt"
+  -classpath "$JAR" -d "$WORK/classes" @"$SOURCES"
 
 find "$WORK/classes" -name '*.class' > "$WORK/classes.txt"
-"$BT/d8" --release --min-api "$MIN_SDK" --lib "$JAR" --output "$WORK" @"$WORK/classes.txt"
+if [[ $WINDOWS == 1 ]]; then
+  # The Windows SDK ships these as .bat files; invoking their bundled jars avoids
+  # cmd.exe argument quoting and lets Git Bash use the same build flow as Unix.
+  while IFS= read -r path; do cygpath -am "$path"; done \
+    < "$WORK/classes.txt" > "$WORK/classes.windows.txt"
+  "$JAVA_HOME/bin/java" -cp "$BT/lib/d8.jar" com.android.tools.r8.D8 \
+    --release --min-api "$MIN_SDK" --lib "$JAR" --output "$WORK" @"$WORK/classes.windows.txt"
+else
+  "$BT/d8" --release --min-api "$MIN_SDK" --lib "$JAR" --output "$WORK" @"$WORK/classes.txt"
+fi
 (cd "$WORK" && zip -q -X app.apk classes.dex)
 
 "$BT/zipalign" -f -p 4 "$WORK/app.apk" "$WORK/aligned.apk"
-"$BT/apksigner" sign --ks "$KEYSTORE" --ks-pass "pass:$KEYPASS" --key-pass "pass:$KEYPASS" \
-  --out build/dumbtv-home.apk "$WORK/aligned.apk"
-"$BT/apksigner" verify build/dumbtv-home.apk
+if [[ $WINDOWS == 1 ]]; then
+  "$JAVA_HOME/bin/java" -cp "$BT/lib/apksigner.jar" com.android.apksigner.ApkSignerTool sign \
+    --ks "$KEYSTORE" --ks-pass "pass:$KEYPASS" --key-pass "pass:$KEYPASS" \
+    --out build/dumbtv-home.apk "$WORK/aligned.apk"
+  "$JAVA_HOME/bin/java" -cp "$BT/lib/apksigner.jar" com.android.apksigner.ApkSignerTool verify build/dumbtv-home.apk
+else
+  "$BT/apksigner" sign --ks "$KEYSTORE" --ks-pass "pass:$KEYPASS" --key-pass "pass:$KEYPASS" \
+    --out build/dumbtv-home.apk "$WORK/aligned.apk"
+  "$BT/apksigner" verify build/dumbtv-home.apk
+fi
 
 perms=$("$BT/aapt2" dump permissions build/dumbtv-home.apk | grep -c 'uses-permission' || true)
 printf 'built build/dumbtv-home.apk  %s bytes  %s uses-permission entries\n' \

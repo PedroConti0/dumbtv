@@ -70,9 +70,6 @@ final class Config {
     static final Choice ORDER = new Choice("order", "App order", "custom",
             new String[] {"custom", "recent"},
             new String[] {"Your order", "Recently used"});
-    static final Choice ALL_APPS = new Choice("all_apps", "All apps section", "off",
-            new String[] {"off", "on"},
-            new String[] {"Hidden", "Shown"});
     static final Choice LABELS = new Choice("labels", "App names", "focus",
             new String[] {"focus", "always", "never"},
             new String[] {"On focus", "Always", "Never"});
@@ -101,8 +98,8 @@ final class Config {
             new String[] {"Off", "Every return home", "Every hour", "Every day", "By time of day"});
 
     /**
-     * For a TV children use: hides Options and Settings and turns off the tile menu, so the home
-     * screen only opens apps and inputs. Holding Menu for {@link Home#UNLOCK_MS} opens Options.
+     * For TVs children use: hides the home menu and turns off the tile menu, so the home screen
+     * only opens apps and inputs. Holding Menu for {@link Home#UNLOCK_MS} opens Options.
      */
     static final Choice LOCK = new Choice("lock", "Child lock", "off",
             new String[] {"off", "on"},
@@ -111,13 +108,10 @@ final class Config {
     static final Choice TILE_STYLE = new Choice("tile_style", "App tile style", "original",
             new String[] {"original", "afterglow", "shelf"},
             new String[] {"Original", "Afterglow", "Icon shelf"});
-    /** Options and Settings in the corner: text chips, or icon buttons whose name shows on focus. */
-    static final Choice CHIPS = new Choice("chips", "Chip style", "text",
-            new String[] {"text", "icons"}, new String[] {"Text", "Icons"});
     /** The banner of hand-picked titles from {@link Library}; hidden anyway while it has none. */
     static final Choice LIBRARY = new Choice("library", "Library banner", "on",
             new String[] {"on", "off"}, new String[] {"Shown", "Hidden"});
-    static final Choice[] CHOICES = {ACCENT, TILES, LAYOUT, ORDER, ALL_APPS, LABELS, CLOCK, MEMORY, INPUTS, SWITCH, BACKGROUND, DIM, ROTATE, LOCK, TILE_STYLE, CHIPS, LIBRARY};
+    static final Choice[] CHOICES = {ACCENT, TILES, LAYOUT, ORDER, LABELS, CLOCK, MEMORY, INPUTS, SWITCH, BACKGROUND, DIM, ROTATE, LOCK, TILE_STYLE, LIBRARY};
 
     /** Folder of wallpapers, next to home.conf, that Background › Image file rotates through. */
     static final String WALLPAPERS = "wallpapers";

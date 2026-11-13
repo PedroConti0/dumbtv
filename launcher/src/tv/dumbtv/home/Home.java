@@ -36,6 +36,7 @@ import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -76,9 +77,15 @@ public final class Home extends Activity {
     private View shade;
     private View tint;
     private LinearLayout head;
-    private TextView clock, date;
+    private ScrollView pageScroll;
+    private TextView menuButton;
+    private PopupWindow homeMenu;
+    private LinearLayout homeMenuAppRows;
+    private final Map<String, TextView> homeMenuAppEntries = new HashMap<>();
+    private Ui.TimeTextView clock;
+    private TextView dateLine;
     private Meter meter;
-    private Row apps, allApps, inputs;
+    private Row apps, inputs;
     private Hero hero;
     private int libraryGeneration;
     private Map<String, Long> recent = new HashMap<>();
@@ -177,15 +184,23 @@ public final class Home extends Activity {
             scroll.setFocusable(false);
             scroll.setHorizontalScrollBarEnabled(false);
             scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-            scroll.setClipChildren(false);
-            scroll.setClipToPadding(false);
+            scroll.setClipChildren(true);
+            scroll.setClipToPadding(true);
             scroll.setPadding(edge - bleed, 0, edge - bleed, 0);
             scroll.addView(strip, new FrameLayout.LayoutParams(WRAP, WRAP));
             grid = new Grid(Home.this);
+            grid.setMaxColumns(shelf && Catalog.isApp(kind) ? 3 : 0);
             grid.setPadding(edge, dp(shelf ? 16 : 12), edge, dp(shelf ? 14 : 8));
             parent.addView(title, new LinearLayout.LayoutParams(MATCH, WRAP));
-            parent.addView(scroll, new LinearLayout.LayoutParams(MATCH, WRAP));
+            parent.addView(scroll, new LinearLayout.LayoutParams(scrollViewportWidth(shelf), WRAP));
             parent.addView(grid, new LinearLayout.LayoutParams(MATCH, WRAP));
+        }
+
+        private int scrollViewportWidth(boolean shelf) {
+            if (!shelf || !Catalog.isApp(kind)) return MATCH;
+            int gap = dp(26), bleed = dp(18);
+            int width = 3 * (cardSize()[0] + gap) + homeGutter() + bleed;
+            return Math.min(getResources().getDisplayMetrics().widthPixels, width);
         }
 
         void applyStyle() {
@@ -199,6 +214,13 @@ public final class Home extends Activity {
             title.setPadding(edge, dp(shelf ? 26 : 20), edge, dp(shelf ? 4 : 2));
             strip.setPadding(bleed, dp(shelf ? 16 : 12), bleed, dp(shelf ? 14 : 8));
             grid.setPadding(edge, dp(shelf ? 16 : 12), edge, dp(shelf ? 14 : 8));
+            grid.setMaxColumns(shelf && Catalog.isApp(kind) ? 3 : 0);
+            ViewGroup.LayoutParams scrollLp = scroll.getLayoutParams();
+            int viewport = scrollViewportWidth(shelf);
+            if (scrollLp.width != viewport) {
+                scrollLp.width = viewport;
+                scroll.setLayoutParams(scrollLp);
+            }
         }
 
         /** Whichever container currently holds the tiles, following Options › Layout. */
@@ -265,6 +287,7 @@ public final class Home extends Activity {
         }
         int fit = getResources().getDisplayMetrics().widthPixels
                 / (cardSize()[0] + dp(shelfStyle() ? 26 : 18)) + 1;
+        if (shelfStyle()) fit = Math.min(fit, 3);
         boolean cornerIcon = wantsAppIcon();
         List<Item> first = new ArrayList<>();
         List<Runnable> jobs = new ArrayList<>();
@@ -425,6 +448,10 @@ public final class Home extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (homeMenu != null && homeMenu.isShowing()) {
+            homeMenu.dismiss();
+            return;
+        }
         focusFirst();
     }
 
@@ -469,7 +496,7 @@ public final class Home extends Activity {
         if (code == KeyEvent.KEYCODE_MENU) {
             View f = getCurrentFocus();
             if (f instanceof Tile) menu((Tile) f);
-            else startActivity(new Intent(this, Options.class));
+            else toggleHomeMenu();
             return true;
         }
         return super.onKeyDown(code, e);
@@ -596,6 +623,7 @@ public final class Home extends Activity {
                 }
             }
         };
+        pageScroll = scroll;
         scroll.setFocusable(false);
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(false);
@@ -645,10 +673,14 @@ public final class Home extends Activity {
                         if (edge) return focused;
                     }
 
-                    // Up from the first line of the apps row goes to the library banner.
+                    // Up from the first line of the apps row returns to the banner,
+                    // or to the home menu when no banner is present.
                     if (direction == View.FOCUS_UP && Catalog.APPS.equals(tile.kind)
-                            && heroShown() && !(grid && aboveInGrid(parent, tile))) {
-                        return hero;
+                            && !(grid && aboveInGrid(parent, tile))) {
+                        if (heroShown()) return hero;
+                        if (menuButton != null && menuButton.getVisibility() == View.VISIBLE) {
+                            return menuButton;
+                        }
                     }
 
                     // Stay in a grid until its last/first line. Crossing a section restores
@@ -698,11 +730,13 @@ public final class Home extends Activity {
         head.setPadding(homeGutter(), 0, homeGutter(), dp(shelfStyle() ? 16 : 12));
         LinearLayout when = new LinearLayout(this);
         when.setOrientation(LinearLayout.VERTICAL);
-        clock = Ui.text(this, shelfStyle() ? 44 : 52, Ui.TEXT, Ui.LIGHT);
-        date = Ui.text(this, 15, shelfStyle() ? Ui.HOME_SECONDARY : Ui.MUTED, Ui.MEDIUM);
-        date.setPadding(dp(2), dp(8), 0, 0);
-        when.addView(clock);
-        when.addView(date);
+        dateLine = Ui.text(this, 18, Ui.TEXT, Ui.MEDIUM);
+        dateLine.setSingleLine(true);
+        clock = new Ui.TimeTextView(this);
+        when.addView(dateLine);
+        LinearLayout.LayoutParams clockLp = new LinearLayout.LayoutParams(WRAP, WRAP);
+        clockLp.topMargin = dp(2);
+        when.addView(clock, clockLp);
         meter = new Meter(this);
         meter.setWords(getString(R.string.meter_title), getString(R.string.meter_free),
                 getString(R.string.meter_low));
@@ -712,10 +746,8 @@ public final class Home extends Activity {
         under.leftMargin = dp(2);
         when.addView(meter, under);
         head.addView(when, new LinearLayout.LayoutParams(0, WRAP, 1f));
-        head.addView(chip(getString(R.string.options), R.drawable.chip_options, R.drawable.chip_options_mark,
-                v -> startActivity(new Intent(this, Options.class))));
-        head.addView(chip(getString(R.string.settings), R.drawable.chip_settings, R.drawable.chip_settings_mark,
-                v -> openSettings()));
+        menuButton = homeMenuButton();
+        head.addView(menuButton, new LinearLayout.LayoutParams(WRAP, WRAP));
         column.addView(head, new LinearLayout.LayoutParams(MATCH, WRAP));
 
         hero = new Hero(this, ui, io);
@@ -731,8 +763,6 @@ public final class Home extends Activity {
         this.column = column;
 
         apps = new Row(Catalog.APPS, getString(R.string.row_apps), column);
-        allApps = new Row(Catalog.ALL_APPS, getString(R.string.row_all_apps), column);
-        allApps.setVisible(false);
         inputs = new Row(Catalog.INPUTS, getString(R.string.row_inputs), column);
         return root;
     }
@@ -791,80 +821,192 @@ public final class Home extends Activity {
         return "on".equals(cfg.get(Config.LOCK));
     }
 
-    /**
-     * A chip in the corner. Options › Chip style picks its look: the text chip (the default), or
-     * a round icon button whose name shows next to the icon only while it has the focus, so the
-     * corner stays quiet and the remote still says where OK goes. {@code shape} and
-     * {@code mark} are the two layers {@link Ui#chipIcon} tints; {@link #apply} draws them.
-     */
-    private TextView chip(String label, int shape, int mark, View.OnClickListener click) {
-        TextView v = Ui.text(this, 14, Ui.TEXT, Ui.MEDIUM);
-        v.setTag(new int[] {shape, mark});
-        v.setContentDescription(label);
-        v.setGravity(Gravity.CENTER);
-        v.setFocusable(true);
-        v.setClickable(true);
-        v.setOnClickListener(click);
-        v.setOnFocusChangeListener((view, has) -> {
-            chipLook(v, has);
-            view.animate().scaleX(has ? 1.06f : 1f).scaleY(has ? 1.06f : 1f).setDuration(110).start();
-            if (has) focusBackground(null);
+    private TextView homeMenuButton() {
+        TextView button = Ui.text(this, 14, Ui.TEXT, Ui.MEDIUM);
+        button.setGravity(Gravity.CENTER);
+        button.setContentDescription(getString(R.string.home_menu));
+        button.setFocusable(true);
+        button.setClickable(true);
+        button.setMinimumWidth(dp(54));
+        button.setMinimumHeight(dp(54));
+        button.setPadding(dp(14), dp(14), dp(14), dp(14));
+        button.setOnClickListener(v -> toggleHomeMenu());
+        button.setOnFocusChangeListener((v, focused) -> {
+            v.animate().scaleX(focused ? 1.05f : 1f).scaleY(focused ? 1.05f : 1f)
+                    .setDuration(110).start();
+            if (focused) focusBackground(null);
         });
-        chipLook(v, false);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(WRAP, WRAP);
-        lp.leftMargin = dp(10);
-        lp.topMargin = dp(6);
-        v.setLayoutParams(lp);
-        chips.add(v);
-        return v;
+        chips.add(button);
+        return button;
     }
 
-    private boolean iconChips() {
-        return "icons".equals(cfg.get(Config.CHIPS));
-    }
-
-    /** Text and padding for the chip style: the name always for text, on focus only for icons. */
-    private void chipLook(TextView c, boolean focused) {
-        if (!iconChips()) {
-            c.setText(c.getContentDescription());
-            c.setCompoundDrawablePadding(0);
-            c.setPadding(dp(18), dp(9), dp(18), dp(9));
+    private void toggleHomeMenu() {
+        if (homeMenu != null && homeMenu.isShowing()) {
+            homeMenu.dismiss();
             return;
         }
-        c.setText(focused ? c.getContentDescription() : "");
-        c.setCompoundDrawablePadding(focused ? dp(8) : 0);
-        c.setPadding(dp(10), dp(10), dp(focused ? 16 : 10), dp(10));
+        int accent = cfg.accent();
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(12), dp(12), dp(12), dp(12));
+        panel.setClipChildren(true);
+        panel.setClipToPadding(true);
+
+        Drawable options = Ui.chipIcon(getDrawable(R.drawable.chip_options),
+                getDrawable(R.drawable.chip_options_mark), accent, dp(24));
+        panel.addView(menuEntry(getString(R.string.options), options, () -> {
+            homeMenu.dismiss();
+            startActivity(new Intent(this, Options.class));
+        }));
+        Drawable settings = Ui.chipIcon(getDrawable(R.drawable.chip_settings),
+                getDrawable(R.drawable.chip_settings_mark), accent, dp(24));
+        panel.addView(menuEntry(getString(R.string.settings), settings, () -> {
+            homeMenu.dismiss();
+            openSettings();
+        }));
+
+        View divider = new View(this);
+        divider.setBackgroundColor(0x48FFFFFF);
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(MATCH, dp(1));
+        dividerLp.topMargin = dp(9);
+        dividerLp.bottomMargin = dp(8);
+        panel.addView(divider, dividerLp);
+
+        TextView heading = Ui.text(this, 14, Ui.HOME_SECONDARY, Ui.MEDIUM);
+        heading.setText(R.string.row_apps);
+        heading.setPadding(dp(12), dp(8), dp(12), dp(8));
+        panel.addView(heading);
+
+        ScrollView appScroll = new ScrollView(this);
+        appScroll.setFillViewport(false);
+        appScroll.setVerticalScrollBarEnabled(false);
+        appScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        homeMenuAppRows = new LinearLayout(this);
+        homeMenuAppRows.setOrientation(LinearLayout.VERTICAL);
+        appScroll.addView(homeMenuAppRows, new ScrollView.LayoutParams(MATCH, WRAP));
+        panel.addView(appScroll, new LinearLayout.LayoutParams(MATCH, 0, 1f));
+        renderHomeMenuApps();
+
+        int width = Math.min(dp(320), getResources().getDisplayMetrics().widthPixels - dp(48));
+        int top = dp(18);
+        int height = getResources().getDisplayMetrics().heightPixels - dp(36);
+        PopupWindow popup = new PopupWindow(panel, width, height, true);
+        popup.setBackgroundDrawable(Ui.frostedPanel(this, 22));
+        popup.setOutsideTouchable(true);
+        popup.setElevation(dp(48));
+        popup.setClippingEnabled(true);
+        popup.setOnDismissListener(() -> {
+            if (homeMenu == popup) homeMenu = null;
+            homeMenuAppRows = null;
+            homeMenuAppEntries.clear();
+            if (!isFinishing() && menuButton != null) {
+                menuButton.setVisibility(locked() ? View.GONE : View.VISIBLE);
+                if (menuButton.getVisibility() == View.VISIBLE) menuButton.requestFocus();
+            }
+        });
+        homeMenu = popup;
+        menuButton.setVisibility(View.GONE);
+        ui.post(() -> {
+            if (homeMenu != popup || isFinishing()) return;
+            popup.showAtLocation(root, Gravity.TOP | Gravity.END, dp(12), top);
+            panel.getChildAt(0).requestFocus();
+        });
     }
+
+    private void renderHomeMenuApps() {
+        if (homeMenuAppRows == null) return;
+        homeMenuAppRows.removeAllViews();
+        homeMenuAppEntries.clear();
+        List<Item> listed = Catalog.visible(cfg, Catalog.ALL_APPS, apps.all);
+        for (Item item : listed) {
+            Drawable rowIcon = appMenuIcon(item);
+            TextView entry = menuEntry(Catalog.label(cfg, item).toString(), rowIcon, () -> {
+                homeMenu.dismiss();
+                launch(appIntent(item), item.id);
+            });
+            entry.setCompoundDrawablePadding(dp(14));
+            entry.setMinimumHeight(dp(58));
+            entry.setOnLongClickListener(v -> {
+                showHomeMenuAppActions(item);
+                return true;
+            });
+            homeMenuAppRows.addView(entry, new LinearLayout.LayoutParams(MATCH, WRAP));
+            homeMenuAppEntries.put(item.id, entry);
+            if (!item.artRequested || item.icon == null) loadArt(item);
+        }
+    }
+
+    private Drawable appMenuIcon(Item item) {
+        Drawable icon = item.icon;
+        if (icon == null) return null;
+        Drawable.ConstantState state = icon.getConstantState();
+        Drawable copy = state == null ? icon.mutate() : state.newDrawable(getResources()).mutate();
+        copy.setBounds(0, 0, dp(32), dp(32));
+        return copy;
+    }
+
+    private void showHomeMenuAppActions(Item item) {
+        boolean pinned = Catalog.shown(cfg, Catalog.APPS, item);
+        new AlertDialog.Builder(this, Ui.DIALOG)
+                .setTitle(Catalog.label(cfg, item))
+                .setItems(new String[] {getString(pinned ? R.string.tile_unpin : R.string.tile_pin),
+                        getString(R.string.tile_rename), getString(R.string.tile_app_info)}, (d, which) -> {
+                    if (which == 0) {
+                        Catalog.setShown(cfg, Catalog.APPS, item, !pinned);
+                        render(apps);
+                    } else {
+                        Tile target = new Tile(this, item, Catalog.ALL_APPS, Catalog.label(cfg, item),
+                                cardSize()[0], cardSize()[1], cfg.get(Config.LABELS), cfg.accent());
+                        if (which == 1) rename(target); else appInfo(target);
+                    }
+                })
+                .show();
+    }
+
+    private TextView menuEntry(String label, Drawable icon, Runnable action) {
+        TextView row = Ui.text(this, 16, Ui.TEXT, Ui.MEDIUM);
+        row.setText(label);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setCompoundDrawablesRelative(icon, null, null, null);
+        row.setCompoundDrawablePadding(dp(14));
+        row.setPadding(dp(12), 0, dp(12), 0);
+        row.setMinimumHeight(dp(52));
+        row.setFocusable(true);
+        row.setClickable(true);
+        Ui.menuFocusStyle(row, dp(14));
+        row.setOnClickListener(v -> action.run());
+        return row;
+    }
+
 
     private void apply() {
         applied = cfg.version();
         int accent = cfg.accent();
-        boolean icons = iconChips();
-        for (TextView c : chips) {
-            Ui.focusStyle(c, accent, 0x14FFFFFF, dp(icons ? 21 : 18));
-            int[] art = (int[]) c.getTag();
-            c.setCompoundDrawablesRelative(icons ? Ui.chipIcon(getDrawable(art[0]), getDrawable(art[1]),
-                    accent, dp(22)) : null, null, null, null);
-            chipLook(c, c.isFocused());
-            c.setVisibility(locked() ? View.GONE : View.VISIBLE);
-        }
+        boolean shelf = shelfStyle();
+        Ui.focusStyle(menuButton, accent, shelf ? 0x26E8EFF8 : 0x14FFFFFF, dp(15));
+        Drawable hamburger = getDrawable(R.drawable.chip_menu).mutate();
+        hamburger.setTintList(Ui.focusedColor(accent, 0xD9FFFFFF));
+        hamburger.setBounds(0, 0, dp(24), dp(24));
+        menuButton.setCompoundDrawablesRelative(hamburger, null, null, null);
+        menuButton.setVisibility(locked() ? View.GONE : View.VISIBLE);
         meter.setVisibility("on".equals(cfg.get(Config.MEMORY)) ? View.VISIBLE : View.GONE);
         meter.setAccent(accent);
         hero.setAccent(accent);
-        boolean shelf = shelfStyle();
         column.setPadding(0, dp(shelf ? 34 : 40), 0, dp(32));
         head.setPadding(homeGutter(), 0, homeGutter(), dp(shelf ? 16 : 12));
-        clock.setTextSize(shelf ? 44 : 52);
-        date.setTextColor(shelf ? Ui.HOME_SECONDARY : Ui.MUTED);
+        clock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 80f);
+        clock.setTextScaleX(0.86f);
+        clock.setSignature(shelf && "midnight".equals(cfg.get(Config.BACKGROUND)));
+        dateLine.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 18f);
+        dateLine.setTextColor(Ui.TEXT);
+        dateLine.setTypeface(Ui.MEDIUM);
         LinearLayout.LayoutParams heroLp = (LinearLayout.LayoutParams) hero.getLayoutParams();
         heroLp.leftMargin = homeGutter();
         heroLp.rightMargin = homeGutter();
         hero.setLayoutParams(heroLp);
         apps.applyStyle();
-        allApps.applyStyle();
         inputs.applyStyle();
-        String appsTitle = getString("on".equals(cfg.get(Config.ALL_APPS))
-                ? R.string.row_pinned_apps : R.string.row_apps);
+        String appsTitle = getString(R.string.row_pinned_apps);
         apps.title.setText(shelfStyle() ? appsTitle : appsTitle.toUpperCase(Locale.ROOT));
         String state = artState();
         if (!state.equals(artState)) {
@@ -872,7 +1014,6 @@ public final class Home extends Activity {
             for (Item it : apps.all) it.artRequested = false;
         }
         render(apps);
-        render(allApps);
         render(inputs);
         background();
         tick();
@@ -897,7 +1038,6 @@ public final class Home extends Activity {
                 }
                 apps.all = list;
                 render(apps);
-                render(allApps);
             });
         });
     }
@@ -960,7 +1100,7 @@ public final class Home extends Activity {
 
         boolean enabled = !Catalog.INPUTS.equals(row.kind) || "on".equals(cfg.get(Config.INPUTS));
         List<Item> shown = enabled ? Catalog.visible(cfg, row.kind,
-                row == allApps ? apps.all : row.all, recentFor(row.kind))
+                row.all, recentFor(row.kind))
                 : new ArrayList<>();
         int[] size = cardSize();
         int w = size[0], h = Catalog.isApp(row.kind) ? size[1] : Math.round(size[1] * 0.56f);
@@ -1043,9 +1183,8 @@ public final class Home extends Activity {
         ViewGroup.LayoutParams params = apps.title.getLayoutParams();
         if (!(params instanceof LinearLayout.LayoutParams)) return;
         LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) params;
-        // The library banner takes that space when it shows, and so does All apps.
         int targetMargin = (!"grid".equals(cfg.get(Config.LAYOUT)) && isInputsHidden()
-                && !heroShown() && allApps.title.getVisibility() != View.VISIBLE) ? appRowShift() : 0;
+                && !heroShown()) ? appRowShift() : 0;
         if (lp.topMargin != targetMargin) {
             lp.topMargin = targetMargin;
             apps.title.setLayoutParams(lp);
@@ -1054,14 +1193,14 @@ public final class Home extends Activity {
 
     private void loadArt(Item it) {
         it.artRequested = true;
-        Runnable job = artJob(it, wantsAppIcon());
+        Runnable job = artJob(it, wantsAppIcon() || homeMenuAppEntries.containsKey(it.id));
         io.execute(() -> {
             job.run();
             ui.post(() -> {
-                for (Row row : new Row[] {apps, allApps}) {
-                    ViewGroup tiles = row.tiles();
-                    for (int i = 0; i < tiles.getChildCount(); i++) tiles.getChildAt(i).invalidate();
-                }
+                ViewGroup tiles = apps.tiles();
+                for (int i = 0; i < tiles.getChildCount(); i++) tiles.getChildAt(i).invalidate();
+                TextView entry = homeMenuAppEntries.get(it.id);
+                if (entry != null) entry.setCompoundDrawablesRelative(appMenuIcon(it), null, null, null);
                 if (focusedItem() == it) focusBackground(it);
             });
         });
@@ -1169,7 +1308,7 @@ public final class Home extends Activity {
     }
 
     private Row[] rows() {
-        return new Row[] {apps, allApps, inputs};
+        return new Row[] {apps, inputs};
     }
 
     private Row row(String kind) {
@@ -1201,7 +1340,7 @@ public final class Home extends Activity {
             row.scroll.scrollTo(0, 0);
             if (first == null) first = row.tiles().getChildAt(0);
         }
-        landed = apps.tiles().getChildCount() > 0 || allApps.tiles().getChildCount() > 0;
+        landed = apps.tiles().getChildCount() > 0;
         if (first == null) first = chips.get(0);
         first.requestFocus();
     }
@@ -1219,7 +1358,7 @@ public final class Home extends Activity {
             clock.append(half);
         }
         Locale locale = Locale.getDefault();
-        date.setText(DateFormat.format(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), now));
+        dateLine.setText(DateFormat.format(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), now));
         if (meter.getVisibility() == View.VISIBLE) {
             meter.update((android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE));
         }
@@ -1362,27 +1501,8 @@ public final class Home extends Activity {
 
     private void menu(Tile t) {
         if (locked()) return;
-        if (Catalog.ALL_APPS.equals(t.kind)) {
-            boolean pinned = Catalog.shown(cfg, Catalog.APPS, t.item);
-            new AlertDialog.Builder(this, Ui.DIALOG)
-                    .setTitle(Catalog.label(cfg, t.item))
-                    .setItems(new String[] {getString(pinned ? R.string.tile_unpin : R.string.tile_pin),
-                            getString(R.string.tile_rename), getString(R.string.tile_app_info)}, (d, which) -> {
-                        if (which == 0) {
-                            Catalog.setShown(cfg, Catalog.APPS, t.item, !pinned);
-                            render(apps);
-                            render(allApps);
-                        } else if (which == 1) {
-                            rename(t);
-                        } else {
-                            appInfo(t);
-                        }
-                    })
-                    .show();
-            return;
-        }
         boolean app = Catalog.APPS.equals(t.kind);
-        boolean pinning = app && "on".equals(cfg.get(Config.ALL_APPS));
+        boolean pinning = app;
         // Icon picks from the chosen pack, so it is only offered while that pack is installed.
         boolean icon = app && iconPacks.containsKey(cfg.get(IconPack.KEY, IconPack.OFF));
         List<Integer> menu = new ArrayList<>();

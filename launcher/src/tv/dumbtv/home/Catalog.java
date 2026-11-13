@@ -133,7 +133,7 @@ final class Catalog {
         // hidden there out of reach on this screen. Sort the full list by its displayed names.
         if (ALL_APPS.equals(kind)) {
             List<Item> out = new ArrayList<>();
-            if (!"on".equals(cfg.get(Config.ALL_APPS)) || "on".equals(cfg.get(Config.LOCK))) return out;
+            if ("on".equals(cfg.get(Config.LOCK))) return out;
             out.addAll(all);
             Collator collator = Collator.getInstance();
             Collections.sort(out, (a, b) -> collator.compare(label(cfg, a).toString(), label(cfg, b).toString()));

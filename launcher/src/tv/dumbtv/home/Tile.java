@@ -3,12 +3,10 @@ package tv.dumbtv.home;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.DashPathEffect;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.media.tv.TvInputManager;
 import android.text.Layout;
@@ -36,7 +34,6 @@ final class Tile extends View {
     private final Path arrow = new Path();
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint iconPlate = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint inner = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint under = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -61,12 +58,9 @@ final class Tile extends View {
         stroke = Ui.dp(c, afterglow != null ? 1f : iconShelf ? 3.5f : 2.5f);
 
         fill.setColor(app ? Ui.SURFACE : 0xFF17181B);
-        if (iconShelf) fill.setShader(new LinearGradient(0, 0, 0, cardH,
-                new int[] {Ui.HOME_CARD_TOP, Ui.HOME_CARD_BOTTOM}, null, Shader.TileMode.CLAMP));
         ring.setStyle(Paint.Style.STROKE);
         ring.setStrokeWidth(stroke);
         ring.setColor(accent);
-        iconPlate.setColor(Ui.HOME_CANVAS);
         dot.setColor(0xFF34C759);
         inner.setColor(Ui.TEXT);
         inner.setTypeface(Ui.MEDIUM);
@@ -74,7 +68,7 @@ final class Tile extends View {
         inner.setTextSize(iconShelf ? Ui.sp(c, 16) : Ui.dp(c, app ? 14 : 17));
         under.setColor(Ui.TEXT);
         under.setTypeface(Ui.MEDIUM);
-        under.setTextAlign(Paint.Align.CENTER);
+        under.setTextAlign(iconShelf ? Paint.Align.LEFT : Paint.Align.CENTER);
         under.setTextSize(iconShelf ? Ui.sp(c, 16) : Ui.dp(c, 13));
         if (iconShelf) {
             shelfLabel = StaticLayout.Builder.obtain(title, 0, title.length(), under,
@@ -142,12 +136,12 @@ final class Tile extends View {
     protected void onDraw(Canvas canvas) {
         Drawable banner = item.banner, icon = item.icon;
         canvas.save();
-        canvas.clipPath(clip);
-        canvas.drawRect(card, fill);
+        if (!iconShelf) {
+            canvas.clipPath(clip);
+            canvas.drawRect(card, fill);
+        }
         if (iconShelf) {
             if (icon != null) {
-                canvas.drawRoundRect(iconCard, Ui.dp(getContext(), 18), Ui.dp(getContext(), 18),
-                        iconPlate);
                 int save = canvas.save();
                 canvas.clipPath(iconClip);
                 icon.setBounds(Math.round(iconCard.left), Math.round(iconCard.top),
@@ -185,7 +179,14 @@ final class Tile extends View {
         if (isFocused() || moving) {
             float half = stroke / 2;
             ring.setPathEffect(moving ? new DashPathEffect(new float[] {stroke * 3, stroke * 2}, 0) : null);
-            canvas.drawRoundRect(half, half, cardW - half, cardH - half, radius - half, radius - half, ring);
+            if (iconShelf) {
+                float focusRadius = Ui.dp(getContext(), 18) + half;
+                canvas.drawRoundRect(iconCard.left - half, iconCard.top - half,
+                        iconCard.right + half, iconCard.bottom + half, focusRadius, focusRadius, ring);
+            } else {
+                canvas.drawRoundRect(half, half, cardW - half, cardH - half,
+                        radius - half, radius - half, ring);
+            }
         }
         if (moving) drawArrows(canvas);
         boolean label = iconShelf || banner != null && (labelAlways || labelOnFocus && isFocused());
