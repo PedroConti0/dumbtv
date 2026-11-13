@@ -16,6 +16,11 @@ final class Ui {
     static final int MUTED = 0x99FFFFFF;
     static final int FAINT = 0x66FFFFFF;
     static final int SURFACE = 0xFF1C1D21;
+    static final int HOME_CANVAS = 0xFF0B1220;
+    static final int HOME_CARD_TOP = 0xFF202B42;
+    static final int HOME_CARD_BOTTOM = 0xFF111724;
+    static final int HOME_SECONDARY = 0xFFB5C0D0;
+    static final int HOME_ACCENT = 0xFF3D8BFF;
     static final int DIALOG = android.R.style.Theme_DeviceDefault_Dialog_Alert;
     static final Typeface LIGHT = Typeface.create("sans-serif-light", Typeface.NORMAL);
     static final Typeface MEDIUM = Typeface.create("sans-serif-medium", Typeface.NORMAL);
@@ -26,9 +31,15 @@ final class Ui {
         return Math.round(v * c.getResources().getDisplayMetrics().density);
     }
 
+    static int sp(Context c, float v) {
+        return Math.round(v * c.getResources().getDisplayMetrics().scaledDensity);
+    }
+
     /** Black on light accents, white on dark ones. */
     static int ink(int color) {
-        return Color.luminance(color) > 0.5f ? 0xFF000000 : 0xFFFFFFFF;
+        // WCAG AA body text passes with black once the background luminance is ~0.18;
+        // choosing white up to 0.5 left blue focus chips below 4.5:1.
+        return Color.luminance(color) > 0.179f ? 0xFF000000 : 0xFFFFFFFF;
     }
 
     static TextView text(Context c, float sp, int color, Typeface face) {

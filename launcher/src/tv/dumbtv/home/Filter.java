@@ -14,7 +14,7 @@ import android.os.SystemClock;
  *
  * The filter's BootUpReceiver starts its VPN service without showing the app, and returns at once
  * when the service is already running, so waking it is safe at any time. It accepts only senders
- * holding RECEIVE_BOOT_COMPLETED, the one permission dumbtv home asks for on Fire OS 7 and later.
+ * holding RECEIVE_BOOT_COMPLETED, a normal permission dumbtv home declares on Fire OS 7 and later.
  * A force-stopped filter (dnsfilter.sh replacing its files) gets no broadcast, which is wanted.
  */
 final class Filter {

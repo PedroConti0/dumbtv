@@ -13,6 +13,8 @@
          hold this, and Filter uses it to restart a filter whose process was killed (#162).
          A normal permission, granted at install, with no prompt. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Keeps Fire TV in its screensaver (Daydream) while the home screen is idle. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REORDER_TASKS"
         android:maxSdkVersion="27" />
 

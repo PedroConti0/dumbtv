@@ -109,7 +109,8 @@ final class Config {
             new String[] {"Off", "On"});
 
     static final Choice TILE_STYLE = new Choice("tile_style", "App tile style", "original",
-            new String[] {"original", "afterglow"}, new String[] {"Original", "Afterglow"});
+            new String[] {"original", "afterglow", "shelf"},
+            new String[] {"Original", "Afterglow", "Icon shelf"});
     /** Options and Settings in the corner: text chips, or icon buttons whose name shows on focus. */
     static final Choice CHIPS = new Choice("chips", "Chip style", "text",
             new String[] {"text", "icons"}, new String[] {"Text", "Icons"});
@@ -125,9 +126,9 @@ final class Config {
     private static final String OFFSET = "wallpaper.offset";
 
     private static final int[] ACCENTS = {
-        0xFFFFFFFF, 0xFF3D8BFF, 0xFF2BC4E8, 0xFF34C759, 0xFFFFB340, 0xFFFF5147, 0xFFFF5C9D, 0xFFA07CFF,
+        0xFFFFFFFF, Ui.HOME_ACCENT, 0xFF2BC4E8, 0xFF34C759, 0xFFFFB340, 0xFFFF5147, 0xFFFF5C9D, 0xFFA07CFF,
     };
-    private static final int[] BACKGROUNDS = {0xFF000000, 0xFF141518, 0xFF0B1220, 0xFF000000, 0xFF141518, 0xFF141518};
+    private static final int[] BACKGROUNDS = {0xFF000000, 0xFF141518, Ui.HOME_CANVAS, 0xFF000000, 0xFF141518, 0xFF141518};
 
     private static Config instance;
 

@@ -3,12 +3,16 @@ package tv.dumbtv.home;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.DashPathEffect;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.media.tv.TvInputManager;
+import android.text.Layout;
+import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.View;
@@ -22,12 +26,17 @@ final class Tile extends View {
     private final CharSequence title;
     private final int cardW, cardH, labelH;
     private final boolean labelAlways, labelOnFocus;
+    private final boolean iconShelf;
+    private final StaticLayout shelfLabel;
     private final float radius, stroke;
     private final RectF card = new RectF();
+    private final RectF iconCard = new RectF();
     private final Path clip = new Path();
+    private final Path iconClip = new Path();
     private final Path arrow = new Path();
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint iconPlate = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint inner = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint under = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -43,27 +52,43 @@ final class Tile extends View {
         this.cardW = cardW;
         this.cardH = cardH;
         boolean app = Catalog.isApp(kind);
+        iconShelf = app && "shelf".equals(Config.get(c).get(Config.TILE_STYLE));
         afterglow = app && "afterglow".equals(Config.get(c).get(Config.TILE_STYLE))
                 ? new AfterglowTile(c, item.id, title, accent) : null;
-        labelH = app && afterglow == null ? Ui.dp(c, 26) : 0;
         labelAlways = "always".equals(labels);
         labelOnFocus = "focus".equals(labels);
-        radius = Ui.dp(c, 10);
-        stroke = Ui.dp(c, afterglow == null ? 2.5f : 1f);
+        radius = Ui.dp(c, iconShelf ? 20 : 10);
+        stroke = Ui.dp(c, afterglow != null ? 1f : iconShelf ? 3.5f : 2.5f);
 
         fill.setColor(app ? Ui.SURFACE : 0xFF17181B);
+        if (iconShelf) fill.setShader(new LinearGradient(0, 0, 0, cardH,
+                new int[] {Ui.HOME_CARD_TOP, Ui.HOME_CARD_BOTTOM}, null, Shader.TileMode.CLAMP));
         ring.setStyle(Paint.Style.STROKE);
         ring.setStrokeWidth(stroke);
         ring.setColor(accent);
+        iconPlate.setColor(Ui.HOME_CANVAS);
         dot.setColor(0xFF34C759);
         inner.setColor(Ui.TEXT);
         inner.setTypeface(Ui.MEDIUM);
         inner.setTextAlign(Paint.Align.CENTER);
-        inner.setTextSize(Ui.dp(c, app ? 14 : 17));
+        inner.setTextSize(iconShelf ? Ui.sp(c, 16) : Ui.dp(c, app ? 14 : 17));
         under.setColor(Ui.TEXT);
         under.setTypeface(Ui.MEDIUM);
         under.setTextAlign(Paint.Align.CENTER);
-        under.setTextSize(Ui.dp(c, 13));
+        under.setTextSize(iconShelf ? Ui.sp(c, 16) : Ui.dp(c, 13));
+        if (iconShelf) {
+            shelfLabel = StaticLayout.Builder.obtain(title, 0, title.length(), under,
+                    cardW - Ui.dp(c, 16))
+                    .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                    .setIncludePad(false)
+                    .setMaxLines(2)
+                    .setEllipsize(TextUtils.TruncateAt.END)
+                    .build();
+            labelH = Math.max(Ui.dp(c, 34), shelfLabel.getHeight() + Ui.dp(c, 8));
+        } else {
+            shelfLabel = null;
+            labelH = app && afterglow == null ? Ui.dp(c, 26) : 0;
+        }
 
         setFocusable(true);
         setClickable(true);
@@ -86,6 +111,14 @@ final class Tile extends View {
         card.set(0, 0, cardW, cardH);
         clip.reset();
         clip.addRoundRect(card, radius, radius, Path.Direction.CW);
+        int iconSize = Math.max(1, Math.min(cardH - Ui.dp(getContext(), 20),
+                cardW - Ui.dp(getContext(), 32)));
+        float left = (cardW - iconSize) / 2f;
+        float top = (cardH - iconSize) / 2f;
+        iconCard.set(left, top, left + iconSize, top + iconSize);
+        iconClip.reset();
+        iconClip.addRoundRect(iconCard, Ui.dp(getContext(), 18), Ui.dp(getContext(), 18),
+                Path.Direction.CW);
         if (afterglow != null) afterglow.resize(cardW, cardH);
         setPivotX(cardW / 2f);
         setPivotY(cardH / 2f);
@@ -96,7 +129,8 @@ final class Tile extends View {
         super.onFocusChanged(focused, direction, previous);
         animate().cancel();
         if (focused) {
-            animate().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE).setDuration(110).start();
+            float scale = iconShelf ? 1.05f : FOCUS_SCALE;
+            animate().scaleX(scale).scaleY(scale).setDuration(110).start();
         } else {
             setScaleX(1f);
             setScaleY(1f);
@@ -110,7 +144,23 @@ final class Tile extends View {
         canvas.save();
         canvas.clipPath(clip);
         canvas.drawRect(card, fill);
-        if (afterglow != null) {
+        if (iconShelf) {
+            if (icon != null) {
+                canvas.drawRoundRect(iconCard, Ui.dp(getContext(), 18), Ui.dp(getContext(), 18),
+                        iconPlate);
+                int save = canvas.save();
+                canvas.clipPath(iconClip);
+                icon.setBounds(Math.round(iconCard.left), Math.round(iconCard.top),
+                        Math.round(iconCard.right), Math.round(iconCard.bottom));
+                icon.draw(canvas);
+                canvas.restoreToCount(save);
+            } else if (banner != null) {
+                banner.setBounds(0, 0, cardW, cardH);
+                banner.draw(canvas);
+            } else if (!Catalog.isApp(kind)) {
+                drawLine(canvas, inner, cardW / 2f, cardH / 2f - (inner.ascent() + inner.descent()) / 2);
+            }
+        } else if (afterglow != null) {
             afterglow.draw(canvas, icon, cardW, cardH);
         } else if (banner != null) {
             banner.setBounds(0, 0, cardW, cardH);
@@ -128,7 +178,6 @@ final class Tile extends View {
         canvas.restore();
 
         if (afterglow != null) afterglow.edge(canvas, cardW, cardH, radius);
-
         if (item.state == TvInputManager.INPUT_STATE_CONNECTED) {
             float r = Ui.dp(getContext(), 3.5f);
             canvas.drawCircle(cardW - r * 3, r * 3, r, dot);
@@ -139,9 +188,18 @@ final class Tile extends View {
             canvas.drawRoundRect(half, half, cardW - half, cardH - half, radius - half, radius - half, ring);
         }
         if (moving) drawArrows(canvas);
-        boolean label = banner != null && (labelAlways || labelOnFocus && isFocused());
+        boolean label = iconShelf || banner != null && (labelAlways || labelOnFocus && isFocused());
         if (labelH > 0 && label) {
-            drawLine(canvas, under, cardW / 2f, cardH + labelH - Ui.dp(getContext(), 6));
+            if (iconShelf) {
+                canvas.save();
+                canvas.translate(0, cardH + (labelH - shelfLabel.getHeight()) / 2f);
+                shelfLabel.draw(canvas);
+                canvas.restore();
+            } else {
+                float textHeight = under.descent() - under.ascent();
+                float baseline = cardH + (labelH - textHeight) / 2f - under.ascent();
+                drawLine(canvas, under, cardW / 2f, baseline);
+            }
         }
     }
 

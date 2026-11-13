@@ -139,6 +139,15 @@ case $out in
 esac
 echo "installed $PKG"
 
+# On Fire OS 8 the app's external-files folder is hidden from adb. Stage the project
+# settings in the media folder so Config can import them on the next home start.
+if [[ -f home.conf ]]; then
+  media="/sdcard/Android/media/$PKG"
+  sh_ mkdir -p "$media"
+  adb_ push home.conf "$media/home.conf" >/dev/null
+  echo "settings staged from launcher/home.conf (applied on home start)"
+fi
+
 sh_ dumpsys deviceidle whitelist +$PKG >/dev/null
 # TCL's TclAppBoot refuses to bind the Guard of an app without the AUTO_START app-op (#176).
 # Builds without that op refuse the name. App-ops reach the disk lazily, so it is written

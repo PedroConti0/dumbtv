@@ -20,6 +20,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -61,6 +62,7 @@ public final class Home extends Activity {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final ExecutorService colorIo = Executors.newSingleThreadExecutor();
+    private PowerManager.WakeLock screensaverWakeLock;
     private final List<TextView> chips = new ArrayList<>();
     private Config cfg;
     private TvInputManager tv;
@@ -142,6 +144,7 @@ public final class Home extends Activity {
 
     private final class Row {
         final String kind;
+        final String name;
         final TextView title;
         final HorizontalScrollView scroll;
         final LinearLayout strip;
@@ -150,15 +153,17 @@ public final class Home extends Activity {
 
         Row(String kind, String name, LinearLayout parent) {
             this.kind = kind;
-            int edge = dp(56), bleed = dp(14);
-            title = Ui.text(Home.this, 12, Ui.FAINT, Ui.MEDIUM);
-            title.setText(name.toUpperCase(Locale.ROOT));
-            title.setLetterSpacing(0.14f);
-            title.setPadding(edge, dp(20), edge, dp(2));
+            this.name = name;
+            boolean shelf = shelfStyle();
+            int edge = homeGutter(), bleed = dp(shelf ? 18 : 14);
+            title = Ui.text(Home.this, shelf ? 18 : 12, shelf ? Ui.TEXT : Ui.FAINT, Ui.MEDIUM);
+            title.setText(shelf ? name : name.toUpperCase(Locale.ROOT));
+            title.setLetterSpacing(shelf ? 0.01f : 0.14f);
+            title.setPadding(edge, dp(shelf ? 26 : 20), edge, dp(shelf ? 4 : 2));
             strip = new LinearLayout(Home.this);
             strip.setClipChildren(false);
             strip.setClipToPadding(false);
-            strip.setPadding(bleed, dp(12), bleed, dp(8));
+            strip.setPadding(bleed, dp(shelf ? 16 : 12), bleed, dp(shelf ? 14 : 8));
             scroll = new HorizontalScrollView(Home.this) {
                 /** Keeps the focused tile centered, except near either end of the row. */
                 @Override
@@ -177,10 +182,23 @@ public final class Home extends Activity {
             scroll.setPadding(edge - bleed, 0, edge - bleed, 0);
             scroll.addView(strip, new FrameLayout.LayoutParams(WRAP, WRAP));
             grid = new Grid(Home.this);
-            grid.setPadding(edge, dp(12), edge, dp(8));
+            grid.setPadding(edge, dp(shelf ? 16 : 12), edge, dp(shelf ? 14 : 8));
             parent.addView(title, new LinearLayout.LayoutParams(MATCH, WRAP));
             parent.addView(scroll, new LinearLayout.LayoutParams(MATCH, WRAP));
             parent.addView(grid, new LinearLayout.LayoutParams(MATCH, WRAP));
+        }
+
+        void applyStyle() {
+            boolean shelf = shelfStyle();
+            int edge = homeGutter(), bleed = dp(shelf ? 18 : 14);
+            title.setText(shelf ? name : name.toUpperCase(Locale.ROOT));
+            title.setTextSize(shelf ? 18 : 12);
+            title.setTextColor(shelf ? Ui.TEXT : Ui.FAINT);
+            title.setTypeface(Ui.MEDIUM);
+            title.setLetterSpacing(shelf ? 0.01f : 0.14f);
+            title.setPadding(edge, dp(shelf ? 26 : 20), edge, dp(shelf ? 4 : 2));
+            strip.setPadding(bleed, dp(shelf ? 16 : 12), bleed, dp(shelf ? 14 : 8));
+            grid.setPadding(edge, dp(shelf ? 16 : 12), edge, dp(shelf ? 14 : 8));
         }
 
         /** Whichever container currently holds the tiles, following Options › Layout. */
@@ -245,8 +263,9 @@ public final class Home extends Activity {
             loadApps(null);
             return;
         }
-        int fit = getResources().getDisplayMetrics().widthPixels / (cardSize()[0] + dp(18)) + 1;
-        boolean cornerIcon = "afterglow".equals(cfg.get(Config.TILE_STYLE));
+        int fit = getResources().getDisplayMetrics().widthPixels
+                / (cardSize()[0] + dp(shelfStyle() ? 26 : 18)) + 1;
+        boolean cornerIcon = wantsAppIcon();
         List<Item> first = new ArrayList<>();
         List<Runnable> jobs = new ArrayList<>();
         // A chosen icon pack is read by parsing its whole appfilter; the first frame does not wait
@@ -272,7 +291,25 @@ public final class Home extends Activity {
 
     /** What the tiles' art depends on besides the apps themselves. */
     private String artState() {
-        return cfg.get(IconPack.KEY, IconPack.OFF) + "|" + cfg.joined(IconPack.CHOSEN);
+        return cfg.get(IconPack.KEY, IconPack.OFF) + "|" + cfg.joined(IconPack.CHOSEN)
+                + "|" + cfg.get(Config.TILE_STYLE);
+    }
+
+    private boolean shelfStyle() {
+        return "shelf".equals(cfg.get(Config.TILE_STYLE));
+    }
+
+    private int homeGutter() {
+        float widthDp = getResources().getDisplayMetrics().widthPixels
+                / getResources().getDisplayMetrics().density;
+        float min = shelfStyle() ? 28 : 24;
+        float max = shelfStyle() ? 72 : 56;
+        return dp(Math.min(max, Math.max(min, widthDp * 0.06f)));
+    }
+
+    private boolean wantsAppIcon() {
+        String style = cfg.get(Config.TILE_STYLE);
+        return "afterglow".equals(style) || "shelf".equals(style);
     }
 
     /** Loads one tile's art: the settings are read here, on the UI thread; run it on io. */
@@ -311,6 +348,15 @@ public final class Home extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        // Fire TV enters Amazon's screensaver at the configured idle timeout, but normally
+        // powers the stick/display down again later. A partial lock keeps the TV in Daydream;
+        // unlike KEEP_SCREEN_ON it does not prevent the screensaver from starting.
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        if (screensaverWakeLock == null) {
+            screensaverWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "dumbtv:home");
+            screensaverWakeLock.setReferenceCounted(false);
+        }
+        if (!screensaverWakeLock.isHeld()) screensaverWakeLock.acquire();
         Guard.arrived(this);
         Filter.wake(this);
         cfg.refresh();
@@ -336,6 +382,7 @@ public final class Home extends Activity {
     protected void onPause() {
         super.onPause();
         resumed = false;
+        if (screensaverWakeLock != null && screensaverWakeLock.isHeld()) screensaverWakeLock.release();
         hero.stop();
         stopColorAnimation();
         targetColor = 0;
@@ -641,18 +688,18 @@ public final class Home extends Activity {
         column.setOrientation(LinearLayout.VERTICAL);
         column.setClipChildren(false);
         column.setClipToPadding(false);
-        column.setPadding(0, dp(40), 0, dp(32));
+        column.setPadding(0, dp(shelfStyle() ? 34 : 40), 0, dp(32));
         scroll.addView(column, new FrameLayout.LayoutParams(MATCH, WRAP));
 
         head = new LinearLayout(this);
         head.setClipChildren(false);
         head.setClipToPadding(false);
         head.setGravity(Gravity.TOP);
-        head.setPadding(dp(56), 0, dp(56), dp(12));
+        head.setPadding(homeGutter(), 0, homeGutter(), dp(shelfStyle() ? 16 : 12));
         LinearLayout when = new LinearLayout(this);
         when.setOrientation(LinearLayout.VERTICAL);
-        clock = Ui.text(this, 52, Ui.TEXT, Ui.LIGHT);
-        date = Ui.text(this, 15, Ui.MUTED, Ui.MEDIUM);
+        clock = Ui.text(this, shelfStyle() ? 44 : 52, Ui.TEXT, Ui.LIGHT);
+        date = Ui.text(this, 15, shelfStyle() ? Ui.HOME_SECONDARY : Ui.MUTED, Ui.MEDIUM);
         date.setPadding(dp(2), dp(8), 0, 0);
         when.addView(clock);
         when.addView(date);
@@ -677,8 +724,8 @@ public final class Home extends Activity {
             if (has) focusBackground(null);
         });
         LinearLayout.LayoutParams heroLp = new LinearLayout.LayoutParams(MATCH, dp(220));
-        heroLp.leftMargin = dp(56);
-        heroLp.rightMargin = dp(56);
+        heroLp.leftMargin = homeGutter();
+        heroLp.rightMargin = homeGutter();
         heroLp.topMargin = dp(2);
         column.addView(hero, heroLp);
         this.column = column;
@@ -804,8 +851,21 @@ public final class Home extends Activity {
         meter.setVisibility("on".equals(cfg.get(Config.MEMORY)) ? View.VISIBLE : View.GONE);
         meter.setAccent(accent);
         hero.setAccent(accent);
-        apps.title.setText(getString("on".equals(cfg.get(Config.ALL_APPS))
-                ? R.string.row_pinned_apps : R.string.row_apps).toUpperCase(Locale.ROOT));
+        boolean shelf = shelfStyle();
+        column.setPadding(0, dp(shelf ? 34 : 40), 0, dp(32));
+        head.setPadding(homeGutter(), 0, homeGutter(), dp(shelf ? 16 : 12));
+        clock.setTextSize(shelf ? 44 : 52);
+        date.setTextColor(shelf ? Ui.HOME_SECONDARY : Ui.MUTED);
+        LinearLayout.LayoutParams heroLp = (LinearLayout.LayoutParams) hero.getLayoutParams();
+        heroLp.leftMargin = homeGutter();
+        heroLp.rightMargin = homeGutter();
+        hero.setLayoutParams(heroLp);
+        apps.applyStyle();
+        allApps.applyStyle();
+        inputs.applyStyle();
+        String appsTitle = getString("on".equals(cfg.get(Config.ALL_APPS))
+                ? R.string.row_pinned_apps : R.string.row_apps);
+        apps.title.setText(shelfStyle() ? appsTitle : appsTitle.toUpperCase(Locale.ROOT));
         String state = artState();
         if (!state.equals(artState)) {
             artState = state;
@@ -926,13 +986,12 @@ public final class Home extends Activity {
                 target.addView(t, new ViewGroup.LayoutParams(WRAP, WRAP));
             } else {
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(WRAP, WRAP);
-                lp.rightMargin = dp(18);
+                lp.rightMargin = dp(shelfStyle() ? 26 : 18);
                 target.addView(t, lp);
             }
             if (it.id.equals(keep)) restore = index;
             index++;
-            if (Catalog.isApp(row.kind) && (!it.artRequested
-                    || "afterglow".equals(cfg.get(Config.TILE_STYLE)) && it.icon == null)) loadArt(it);
+            if (Catalog.isApp(row.kind) && (!it.artRequested || wantsAppIcon() && it.icon == null)) loadArt(it);
         }
         row.setVisible(!shown.isEmpty());
         adjustAppRowPosition();
@@ -995,7 +1054,7 @@ public final class Home extends Activity {
 
     private void loadArt(Item it) {
         it.artRequested = true;
-        Runnable job = artJob(it, "afterglow".equals(cfg.get(Config.TILE_STYLE)));
+        Runnable job = artJob(it, wantsAppIcon());
         io.execute(() -> {
             job.run();
             ui.post(() -> {
@@ -1057,6 +1116,16 @@ public final class Home extends Activity {
     }
 
     private int[] cardSize() {
+        if (shelfStyle()) {
+            switch (cfg.get(Config.TILES)) {
+                case "small":
+                    return new int[] {dp(144), dp(106)};
+                case "large":
+                    return new int[] {dp(184), dp(136)};
+                default:
+                    return new int[] {dp(164), dp(120)};
+            }
+        }
         switch (cfg.get(Config.TILES)) {
             case "small":
                 return new int[] {dp(144), dp(81)};

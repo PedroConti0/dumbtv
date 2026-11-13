@@ -10,12 +10,11 @@ A home screen for Fire TV that does one job: show your apps and your HDMI inputs
   Services or any other library.
 - **No network.** There is no `INTERNET` permission, so Android will not let it
   open a connection.
-- **One permission on Fire OS 7 and 8: run at startup.** personalDNSfilter only
-  takes a restart request from an app holding it, and dumbtv home uses it for
-  nothing else: when Android kills the filter under memory pressure, dumbtv home
-  starts it again (on HOME, at boot and every 15 minutes). Fire OS 6 adds usage
-  access and task order for the Keeper below, both limited to Android 8.1 and
-  earlier. Check: `aapt2 dump permissions dumbtv-home.apk`.
+- **No permission prompts on Fire OS 7 and 8.** The launcher declares
+  `RECEIVE_BOOT_COMPLETED` so personalDNSfilter can restart after boot and
+  `WAKE_LOCK` to keep Fire TV in its screensaver while home is idle. Fire OS 6
+  adds usage access and task order for the Keeper below, both limited to Android
+  8.1 and earlier. Check: `aapt2 dump permissions dumbtv-home.apk`.
 - **No ads, no recommended rows, no account, no analytics, no update checks.**
 - About 60–70 MB of memory with the home screen showing, about 37 MB while an app
   plays (measured on a Fire TV Edition television with 1.4 GB of RAM).
@@ -28,6 +27,11 @@ You need `adb` and a TV with ADB debugging on.
 adb connect <tv-ip>:5555         # accept "Allow USB debugging?" on the TV
 ./launcher/install.sh            # download, check the SHA-256, install, take over HOME
 ```
+
+If `launcher/home.conf` exists, the installer also stages it in the app's media
+folder. The launcher imports it once the next time home starts. Keep this file
+updated from **Options › Export settings** when you change preferences on the TV;
+that export is readable over adb even on Fire OS 8.
 
 The APK comes from this repository's
 [releases](https://github.com/humblemuzzu/dumbtv/releases/latest), and `install.sh`
@@ -61,6 +65,12 @@ you open an app. On Fire OS 7 and 8 the Settings button opens Amazon's settings 
 
 **Options** cycles each setting with ◀ ▶ or OK:
 
+When dumbtv home is in front, Fire TV's configured idle timeout starts Amazon's
+screensaver. The launcher holds a partial wake lock while it is in front, which
+keeps Fire TV in the screensaver instead of letting the stick turn itself off.
+Set the Fire TV screensaver start time to about 5 minutes in its Screen Saver
+settings; pressing Power on the remote still turns the TV off.
+
 | Setting | Choices |
 |---|---|
 | Accent | white, blue, cyan, green, amber, red, pink, violet |
@@ -76,7 +86,7 @@ you open an app. On Fire OS 7 and 8 the Settings button opens Amazon's settings 
 | Background | black, graphite, midnight, image, adaptive, adaptive tint |
 | Image dim, wallpaper rotation | for image backgrounds |
 | Child lock | off, on: hides Options and Settings and turns off Hold OK and ☰ Menu on tiles, so the home screen only opens apps and inputs (see below) |
-| App tile style | original (default), Afterglow: uppercase names inside the tile, a brand-color fade into black, a grayscale installed app icon in the corner, and a thin focus border |
+| App tile style | original (default), Afterglow, or Icon shelf: rounded app icons, always-visible titles, generous breathing room and a blue focus outline |
 | Chip style | text (default), icons: Options and Settings become round icon buttons whose knobs and gear hub take the accent color; the name shows next to the icon while it has the focus |
 | Library banner | shown (default), hidden. It only appears once a library folder holds titles (see below) |
 | Icon pack | off, or an installed icon pack; reads "None installed" until one is ([Icon packs](#icon-packs)) |
@@ -106,6 +116,12 @@ Corner icons come from installed apps, so no brand-logo files or downloads are
 needed. Missing icons still leave the name visible. Switching back to Original
 restores the normal banners and App names behavior. Background and layout remain
 separate choices.
+
+**Icon shelf** uses each installed app's own icon in a rounded square card, with its
+name always shown below. The app row uses generous gaps and softer section headings;
+a blue outline and slight scale change mark the focused app. Pair it with the Midnight
+background for an Apple TV-inspired feel. Select it in Options or set
+`tile_style=shelf` in `home.conf`. It uses no Apple artwork or downloaded assets.
 
 | Grid layout | Adaptive background | Adaptive tint |
 |---|---|---|
@@ -333,9 +349,11 @@ writes a copy named `home-export.conf`, which the launcher never reads, so it is
 not taken for a push. Push it back as `home.conf` to restore it:
 
 ```sh
-adb pull /sdcard/Android/media/tv.dumbtv.home/home-export.conf home.conf
-adb push home.conf /sdcard/Android/media/tv.dumbtv.home/home.conf
+adb pull /sdcard/Android/media/tv.dumbtv.home/home-export.conf launcher/home.conf
+adb push launcher/home.conf /sdcard/Android/media/tv.dumbtv.home/home.conf
 ```
+
+The installer stages `launcher/home.conf` automatically on the next install.
 
 `rotate=daytime` matches wallpapers to the time of day by name: `morning` or `day`
 (06:00 to 13:00), `afternoon` or `evening` (13:00 to 20:00), `night` (the rest), as
