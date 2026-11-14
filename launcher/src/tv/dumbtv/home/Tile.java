@@ -95,6 +95,10 @@ final class Tile extends View {
         invalidate();
     }
 
+    int iconCenterY() {
+        return cardH / 2;
+    }
+
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
         setMeasuredDimension(cardW, cardH + labelH);

@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.PixelFormat;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -44,6 +45,8 @@ import android.view.accessibility.AccessibilityEvent;
  */
 public final class Guard extends AccessibilityService {
     static final String AMAZON = "com.amazon.tv.launcher";
+    static final String VPN_LOCATION_ACTION = VpnStatus.ACTION;
+    static final String VPN_LOCATION_EXTRA = VpnStatus.EXTRA;
     private static final String AMAZON_HOME = "com.amazon.tv.launcher.ui.HomeActivity_vNext";
     private static final long COVER_MAX_MS = 1500;
     private static final long LAUNCH_FALLBACK_MS = 150;
@@ -146,8 +149,16 @@ public final class Guard extends AccessibilityService {
         super.onDestroy();
     }
 
+    static String vpnLocation(Context c) {
+        return VpnStatus.location(c);
+    }
+
     @Override
     public void onAccessibilityEvent(AccessibilityEvent e) {
+        if (e.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
+            VpnStatus.readAccessibilityEvent(this, e);
+            return;
+        }
         if (e.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
         CharSequence pkg = e.getPackageName(), cls = e.getClassName();
         if (pkg == null) return;

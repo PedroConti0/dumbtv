@@ -15,7 +15,9 @@ On a Fire TV, over ADB, with no root:
   telemetry and experiment packages; turns off ad tracking and usage reporting.
   Amazon packages are disabled, never uninstalled.
 - **If the owner agrees:** an on-TV DNS filter that blocks Amazon's telemetry and
-  update servers, and dumbtv home in place of Amazon's home screen.
+  update servers, and dumbtv home in place of Amazon's home screen. When its Library
+  banner is enabled, dumbtv home fetches Netflix Top 10 rankings, descriptions and
+  artwork from Netflix over the internet.
 - **Only if the owner names them:** removing apps, switching off Alexa, replacing
   YouTube with SmartTube.
 
@@ -91,7 +93,7 @@ people take them.
 |---|---|---|---|
 | 1 | "Do you watch Prime Video?" No blocks the servers it needs. | yes | `--prime 0\|1` |
 | 2 | "Do you use Alexa or the voice button on the remote?" No switches off Alexa and the app that owns the microphone. | keep | `--alexa 0\|1` |
-| 3 | "Replace Amazon's home screen with dumbtv home?" Open source, apps and inputs only, no ads, no internet access. | yes | `--launcher 0\|1` |
+| 3 | "Replace Amazon's home screen with dumbtv home?" Open source, apps and inputs, no ads. If the Library banner is enabled, it fetches Netflix Top 10 artwork and descriptions from Netflix over the internet. | yes | `--launcher 0\|1` |
 | 4 | "Run the DNS filter on the TV?" It is what stops telemetry and automatic updates. Without it, the protected Amazon packages keep reporting. | yes | `--dnsfilter 0\|1` |
 | 5 | "Are there apps you want removed?" Get names, map them to packages with `data/apps.txt` and `adb shell pm list packages -3`, and read the list back before recording it. | none | `--remove "pkg pkg"` |
 | 6 | "Do you want the YouTube app replaced with SmartTube?" No ads and no Shorts, a different app, same Google account. Ask once; if no, drop it. | no | `--youtube 0\|1` |

@@ -15,7 +15,6 @@ import android.view.ViewGroup;
  */
 final class Grid extends ViewGroup {
     private final int hGap, vGap;
-    private int maxColumns;
 
     Grid(Context c) {
         super(c);
@@ -27,13 +26,7 @@ final class Grid extends ViewGroup {
 
     private int columns(int availableWidth, int childWidth) {
         int fit = Math.max(1, (availableWidth + hGap) / (childWidth + hGap));
-        return maxColumns > 0 ? Math.min(fit, maxColumns) : fit;
-    }
-
-    void setMaxColumns(int max) {
-        if (maxColumns == max) return;
-        maxColumns = max;
-        requestLayout();
+        return fit;
     }
 
     /** Columns in the current layout; 1 before the first layout pass or with no tiles. */

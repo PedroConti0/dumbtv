@@ -12,6 +12,7 @@ source version.env
 APK_URL=https://github.com/humblemuzzu/dumbtv/releases/download/launcher-v$VERSION/dumbtv-home.apk
 
 PKG=tv.dumbtv.home
+RETURN_PKG=tv.dumbtv.returnhome
 GUARD=$PKG/$PKG.Guard
 OLD_GUARD=com.spocky.projengmenu/com.spocky.projengmenu.services.ProjectivyAccessibilityService
 ADB=${ADB:-adb}
@@ -91,6 +92,7 @@ fi
 build_apk() {
   ./build.sh
   APK=build/dumbtv-home.apk
+  RETURN_APK=build/dumbtv-returnhome.apk
 }
 
 # adb ends its output with a blank line, so take the line that carries the result.
@@ -139,6 +141,29 @@ case $out in
   *) echo "error: adb install failed: $(printf '%s' "$out" | tail -1)" >&2; exit 1 ;;
 esac
 echo "installed $PKG"
+
+if [[ $mode != build ]]; then
+  RETURN_APK=build/dumbtv-returnhome-$VERSION.apk
+  if [[ ! -f $RETURN_APK ]]; then
+    echo "building the Amazon app-list shortcut from source"
+    ./build.sh
+    cp build/dumbtv-returnhome.apk "$RETURN_APK"
+  fi
+fi
+helper_out=$(adb_ install -r "$RETURN_APK" 2>&1 | grep -m1 -E 'Success|Failure|failed' || true)
+case $helper_out in
+  *Success*) echo "installed $RETURN_PKG (Amazon app-list shortcut)" ;;
+  *INSTALL_FAILED_UPDATE_INCOMPATIBLE*)
+    # The helper has no user data; replace it when a local development key differs.
+    adb_ uninstall "$RETURN_PKG" >/dev/null 2>&1 || true
+    helper_out=$(adb_ install "$RETURN_APK" 2>&1 | grep -m1 -E 'Success|Failure|failed' || true)
+    [[ $helper_out == *Success* ]] || {
+      echo "error: could not replace the dumbtv return shortcut: ${helper_out:-no adb result}" >&2
+      exit 1
+    }
+    echo "installed $RETURN_PKG (Amazon app-list shortcut)" ;;
+  *) echo "error: could not install the dumbtv return shortcut: ${helper_out:-no adb result}" >&2; exit 1 ;;
+esac
 
 # On Fire OS 8 the app's external-files folder is hidden from adb. Stage the project
 # settings in the media folder so Config can import them on the next home start.

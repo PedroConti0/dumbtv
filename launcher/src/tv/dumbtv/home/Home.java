@@ -31,6 +31,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -69,6 +70,9 @@ public final class Home extends Activity {
     private TvInputManager tv;
     private int applied = -1, appsGeneration;
     private boolean resumed, landed, unlockOpened;
+    private boolean upFromHero;
+    private boolean downFromHero;
+    private boolean animateScrollToFocusedRow;
     private String lastFocusedKind;
     private final Map<String, String> lastIds = new HashMap<>();
     private FrameLayout root;
@@ -78,6 +82,7 @@ public final class Home extends Activity {
     private View tint;
     private LinearLayout head;
     private ScrollView pageScroll;
+    private ValueAnimator pageScrollAnimator;
     private TextView menuButton;
     private PopupWindow homeMenu;
     private LinearLayout homeMenuAppRows;
@@ -87,6 +92,8 @@ public final class Home extends Activity {
     private Meter meter;
     private Row apps, inputs;
     private Hero hero;
+    private int homeMenuTint = 0xFF25282D;
+    private FrameLayout heroSlot;
     private int libraryGeneration;
     private Map<String, Long> recent = new HashMap<>();
     private Tile moving;
@@ -123,6 +130,11 @@ public final class Home extends Activity {
     private final BroadcastReceiver time = new BroadcastReceiver() {
         @Override
         public void onReceive(Context c, Intent i) {
+            if (Guard.VPN_LOCATION_ACTION.equals(i.getAction())) {
+                hero.setVpnLocation(i.getStringExtra(Guard.VPN_LOCATION_EXTRA));
+                loadLibrary();
+                return;
+            }
             tick();
         }
     };
@@ -189,18 +201,10 @@ public final class Home extends Activity {
             scroll.setPadding(edge - bleed, 0, edge - bleed, 0);
             scroll.addView(strip, new FrameLayout.LayoutParams(WRAP, WRAP));
             grid = new Grid(Home.this);
-            grid.setMaxColumns(shelf && Catalog.isApp(kind) ? 3 : 0);
             grid.setPadding(edge, dp(shelf ? 16 : 12), edge, dp(shelf ? 14 : 8));
             parent.addView(title, new LinearLayout.LayoutParams(MATCH, WRAP));
-            parent.addView(scroll, new LinearLayout.LayoutParams(scrollViewportWidth(shelf), WRAP));
+            parent.addView(scroll, new LinearLayout.LayoutParams(MATCH, WRAP));
             parent.addView(grid, new LinearLayout.LayoutParams(MATCH, WRAP));
-        }
-
-        private int scrollViewportWidth(boolean shelf) {
-            if (!shelf || !Catalog.isApp(kind)) return MATCH;
-            int gap = dp(26), bleed = dp(18);
-            int width = 3 * (cardSize()[0] + gap) + homeGutter() + bleed;
-            return Math.min(getResources().getDisplayMetrics().widthPixels, width);
         }
 
         void applyStyle() {
@@ -214,13 +218,6 @@ public final class Home extends Activity {
             title.setPadding(edge, dp(shelf ? 26 : 20), edge, dp(shelf ? 4 : 2));
             strip.setPadding(bleed, dp(shelf ? 16 : 12), bleed, dp(shelf ? 14 : 8));
             grid.setPadding(edge, dp(shelf ? 16 : 12), edge, dp(shelf ? 14 : 8));
-            grid.setMaxColumns(shelf && Catalog.isApp(kind) ? 3 : 0);
-            ViewGroup.LayoutParams scrollLp = scroll.getLayoutParams();
-            int viewport = scrollViewportWidth(shelf);
-            if (scrollLp.width != viewport) {
-                scrollLp.width = viewport;
-                scroll.setLayoutParams(scrollLp);
-            }
         }
 
         /** Whichever container currently holds the tiles, following Options › Layout. */
@@ -287,7 +284,6 @@ public final class Home extends Activity {
         }
         int fit = getResources().getDisplayMetrics().widthPixels
                 / (cardSize()[0] + dp(shelfStyle() ? 26 : 18)) + 1;
-        if (shelfStyle()) fit = Math.min(fit, 3);
         boolean cornerIcon = wantsAppIcon();
         List<Item> first = new ArrayList<>();
         List<Runnable> jobs = new ArrayList<>();
@@ -348,6 +344,9 @@ public final class Home extends Activity {
      */
     private Drawable replacementArt(Item it, String chosen, String pack) {
         if (IconPack.OWN.equals(chosen)) return null;
+        if (chosen == null && "org.smarttube.stable".equals(it.id)) {
+            return getDrawable(R.drawable.youtube_icon);
+        }
         IconPack p = iconPack(pack);
         if (p == null) return null;
         // A picked icon belongs to the pack it came from and only counts while that pack is the
@@ -388,10 +387,12 @@ public final class Home extends Activity {
         else background();
         refreshRecent();
         loadLibrary();
+        hero.setVpnLocation(Guard.vpnLocation(this));
         hero.start();
         IntentFilter f = new IntentFilter(Intent.ACTION_TIME_TICK);
         f.addAction(Intent.ACTION_TIME_CHANGED);
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED);
+        f.addAction(Guard.VPN_LOCATION_ACTION);
         registerReceiver(time, f);
         tick();
     }
@@ -457,6 +458,43 @@ public final class Home extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
+        if (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN) {
+            if (e.getAction() == KeyEvent.ACTION_UP && downFromHero) {
+                downFromHero = false;
+                return true;
+            }
+            if (e.getAction() == KeyEvent.ACTION_DOWN && downFromHero) return true;
+            View focused = getCurrentFocus();
+            if (e.getAction() == KeyEvent.ACTION_DOWN && hero != null
+                    && hero.ownsCarouselFocus(focused) && apps != null
+                    && apps.title.getVisibility() == View.VISIBLE) {
+                View firstApp = firstLeftTile(apps.tiles());
+                if (firstApp != null) {
+                    animateScrollToFocusedRow = true;
+                    if (firstApp.requestFocus()) {
+                        downFromHero = true;
+                        return true;
+                    }
+                    animateScrollToFocusedRow = false;
+                }
+            }
+        }
+        if (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP) {
+            if (e.getAction() == KeyEvent.ACTION_UP && upFromHero) {
+                upFromHero = false;
+                return true;
+            }
+            if (e.getAction() == KeyEvent.ACTION_DOWN && upFromHero) return true;
+            View focused = getCurrentFocus();
+            if (e.getAction() == KeyEvent.ACTION_DOWN && menuButton != null
+                    && menuButton.getVisibility() == View.VISIBLE
+                    && hero != null && hero.ownsCarouselFocus(focused)) {
+                upFromHero = true;
+                if (pageScroll != null) pageScroll.smoothScrollTo(0, 0);
+                menuButton.requestFocus();
+                return true;
+            }
+        }
         if (moving == null) return super.dispatchKeyEvent(e);
         if (e.getAction() == KeyEvent.ACTION_DOWN) {
             switch (e.getKeyCode()) {
@@ -516,6 +554,28 @@ public final class Home extends Activity {
         if (at == null) return 0;
         int range = Math.max(0, content.getHeight() - page.getHeight());
         return Math.max(0, Math.min(range, stopFor(at, rows, page.getHeight())));
+    }
+
+    /** Uses the same paced motion for page transitions in either direction. */
+    private void animatePageScrollTo(int targetY) {
+        if (pageScroll == null || pageScroll.getChildCount() == 0) return;
+        if (pageScrollAnimator != null) pageScrollAnimator.cancel();
+        int startY = pageScroll.getScrollY();
+        int endY = Math.max(0, Math.min(targetY,
+                Math.max(0, pageScroll.getChildAt(0).getHeight() - pageScroll.getHeight())));
+        if (startY == endY) return;
+        ValueAnimator animator = ValueAnimator.ofInt(startY, endY);
+        pageScrollAnimator = animator;
+        animator.setDuration(350L);
+        animator.setInterpolator(new DecelerateInterpolator(1.0f));
+        animator.addUpdateListener(a -> pageScroll.scrollTo(0, (Integer) a.getAnimatedValue()));
+        animator.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                if (pageScrollAnimator == animator) pageScrollAnimator = null;
+            }
+        });
+        animator.start();
     }
 
     /**
@@ -592,11 +652,32 @@ public final class Home extends Activity {
         tint = new View(this);
         root.addView(tint, new FrameLayout.LayoutParams(MATCH, MATCH));
 
+        hero = new Hero(this, ui, io);
+        hero.setTintListener(color -> {
+            homeMenuTint = color;
+            if (homeMenu != null && homeMenu.isShowing())
+                homeMenu.setBackgroundDrawable(Ui.frostedPanel(this, 22, color));
+        });
+        hero.setOnClickListener(v -> hero.openCurrent());
+        hero.setDescriptionClickListener(v -> {
+            if (pageScroll != null) pageScroll.smoothScrollTo(0, 0);
+        });
+        hero.setOnFocusChangeListener((v, has) -> {
+            if (has) focusBackground(null);
+        });
+        root.addView(hero, new FrameLayout.LayoutParams(MATCH, MATCH));
+
         ScrollView scroll = new ScrollView(this) {
             /** Scrolls in whole rows: the focused row shows complete, and a row starts at the top edge. */
             @Override
             protected int computeScrollDeltaToGetChildRectOnScreen(Rect r) {
-                return rowTarget(this, r) - getScrollY();
+                int target = rowTarget(this, r);
+                if (animateScrollToFocusedRow) {
+                    animateScrollToFocusedRow = false;
+                    post(() -> animatePageScrollTo(target));
+                    return 0;
+                }
+                return target - getScrollY();
             }
 
             @Override
@@ -624,6 +705,8 @@ public final class Home extends Activity {
             }
         };
         pageScroll = scroll;
+        scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> anchorHeroArtwork());
+        scroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> hero.setArtworkScroll(y));
         scroll.setFocusable(false);
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(false);
@@ -637,18 +720,36 @@ public final class Home extends Activity {
                 // The library banner sits between the chips and the rows; Down from it
                 // goes where Down from the chips goes without it.
                 if (focused == hero && direction == View.FOCUS_UP) {
+                    // From the carousel, the menu is the nearest actionable control above it.
+                    if (menuButton != null && menuButton.getVisibility() == View.VISIBLE) {
+                        return menuButton;
+                    }
                     for (TextView c : chips) if (c.getVisibility() == View.VISIBLE) return c;
                 }
                 if (focused == hero && direction != View.FOCUS_DOWN) return focused;
+                boolean fromHero = hero != null && hero.ownsCarouselFocus(focused);
                 if (direction == View.FOCUS_DOWN && chips.contains(focused) && heroShown()) {
                     return hero;
                 }
-                if (direction == View.FOCUS_DOWN && (chips.contains(focused) || focused == hero)) {
+                if (direction == View.FOCUS_DOWN && (chips.contains(focused) || fromHero)) {
+                    if (fromHero && apps != null && apps.title.getVisibility() == View.VISIBLE) {
+                        View firstApp = apps.tiles().getChildAt(0);
+                        if (firstApp != null) {
+                            animateScrollToFocusedRow = true;
+                            return firstApp;
+                        }
+                    }
                     View remembered = rememberedTile(lastFocusedKind);
-                    if (remembered != null) return remembered;
+                    if (remembered != null) {
+                        if (fromHero) animateScrollToFocusedRow = true;
+                        return remembered;
+                    }
                     for (Row row : rows()) {
                         View below = nearest(row.tiles(), focused);
-                        if (below != null) return below;
+                        if (below != null) {
+                            if (fromHero) animateScrollToFocusedRow = true;
+                            return below;
+                        }
                     }
                 }
                 if (focused instanceof Tile
@@ -677,6 +778,7 @@ public final class Home extends Activity {
                     // or to the home menu when no banner is present.
                     if (direction == View.FOCUS_UP && Catalog.APPS.equals(tile.kind)
                             && !(grid && aboveInGrid(parent, tile))) {
+                        if (pageScroll != null) pageScroll.post(() -> pageScroll.smoothScrollTo(0, 0));
                         if (heroShown()) return hero;
                         if (menuButton != null && menuButton.getVisibility() == View.VISIBLE) {
                             return menuButton;
@@ -721,6 +823,7 @@ public final class Home extends Activity {
         column.setClipChildren(false);
         column.setClipToPadding(false);
         column.setPadding(0, dp(shelfStyle() ? 34 : 40), 0, dp(32));
+        column.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> anchorHeroArtwork());
         scroll.addView(column, new FrameLayout.LayoutParams(MATCH, WRAP));
 
         head = new LinearLayout(this);
@@ -750,16 +853,15 @@ public final class Home extends Activity {
         head.addView(menuButton, new LinearLayout.LayoutParams(WRAP, WRAP));
         column.addView(head, new LinearLayout.LayoutParams(MATCH, WRAP));
 
-        hero = new Hero(this, ui, io);
-        hero.setOnClickListener(v -> hero.openCurrent());
-        hero.setOnFocusChangeListener((v, has) -> {
-            if (has) focusBackground(null);
-        });
+        heroSlot = new FrameLayout(this);
+        hero.attachContentTo(heroSlot);
         LinearLayout.LayoutParams heroLp = new LinearLayout.LayoutParams(MATCH, dp(220));
         heroLp.leftMargin = homeGutter();
         heroLp.rightMargin = homeGutter();
         heroLp.topMargin = dp(2);
-        column.addView(hero, heroLp);
+        heroSlot.setVisibility(View.GONE);
+        heroSlot.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> anchorHeroArtwork());
+        column.addView(heroSlot, heroLp);
         this.column = column;
 
         apps = new Row(Catalog.APPS, getString(R.string.row_apps), column);
@@ -783,6 +885,22 @@ public final class Home extends Activity {
     private static boolean aboveInGrid(ViewGroup parent, Tile tile) {
         int cols = ((Grid) parent).columns();
         return parent.indexOfChild(tile) - cols >= 0;
+    }
+
+    /** Leftmost tile on the first visual line of a row, independent of RTL child order. */
+    private static View firstLeftTile(ViewGroup row) {
+        if (row == null || row.getChildCount() == 0) return null;
+        int firstLine = Integer.MAX_VALUE;
+        for (int i = 0; i < row.getChildCount(); i++) {
+            firstLine = Math.min(firstLine, row.getChildAt(i).getTop());
+        }
+        View leftmost = null;
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View child = row.getChildAt(i);
+            if (child.getTop() != firstLine) continue;
+            if (leftmost == null || child.getLeft() < leftmost.getLeft()) leftmost = child;
+        }
+        return leftmost;
     }
 
     /**
@@ -891,7 +1009,7 @@ public final class Home extends Activity {
         int top = dp(18);
         int height = getResources().getDisplayMetrics().heightPixels - dp(36);
         PopupWindow popup = new PopupWindow(panel, width, height, true);
-        popup.setBackgroundDrawable(Ui.frostedPanel(this, 22));
+        popup.setBackgroundDrawable(Ui.frostedPanel(this, 22, homeMenuTint));
         popup.setOutsideTouchable(true);
         popup.setElevation(dp(48));
         popup.setClippingEnabled(true);
@@ -996,14 +1114,15 @@ public final class Home extends Activity {
         head.setPadding(homeGutter(), 0, homeGutter(), dp(shelf ? 16 : 12));
         clock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 80f);
         clock.setTextScaleX(0.86f);
-        clock.setSignature(shelf && "midnight".equals(cfg.get(Config.BACKGROUND)));
+        clock.setSignature(false);
         dateLine.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 18f);
         dateLine.setTextColor(Ui.TEXT);
         dateLine.setTypeface(Ui.MEDIUM);
-        LinearLayout.LayoutParams heroLp = (LinearLayout.LayoutParams) hero.getLayoutParams();
-        heroLp.leftMargin = homeGutter();
-        heroLp.rightMargin = homeGutter();
-        hero.setLayoutParams(heroLp);
+        LinearLayout.LayoutParams heroSlotLp = (LinearLayout.LayoutParams) heroSlot.getLayoutParams();
+        heroSlotLp.leftMargin = homeGutter();
+        heroSlotLp.rightMargin = homeGutter();
+        heroSlot.setLayoutParams(heroSlotLp);
+        heroSlot.post(this::anchorHeroArtwork);
         apps.applyStyle();
         inputs.applyStyle();
         String appsTitle = getString(R.string.row_pinned_apps);
@@ -1046,16 +1165,37 @@ public final class Home extends Activity {
         return hero.getVisibility() == View.VISIBLE && hero.hasEntries();
     }
 
+    private void anchorHeroArtwork() {
+        if (hero == null || hero.getVisibility() != View.VISIBLE) return;
+        int screenHeight = root.getHeight() > 0
+                ? root.getHeight() : getResources().getDisplayMetrics().heightPixels;
+        View content = pageScroll == null || pageScroll.getChildCount() == 0
+                ? null : pageScroll.getChildAt(0);
+        int contentHeight = content == null ? screenHeight : Math.max(screenHeight, content.getHeight());
+        hero.setPosterHeight(screenHeight);
+        hero.setArtworkBottom(contentHeight);
+        hero.setArtworkScroll(pageScroll == null ? 0 : pageScroll.getScrollY());
+    }
+
     /** Reads the library folder off the UI thread; the banner hides while it has no titles. */
     private void loadLibrary() {
         int generation = ++libraryGeneration;
         boolean on = "on".equals(cfg.get(Config.LIBRARY));
         io.execute(() -> {
-            List<Library.Entry> list = on ? Library.load(this, cfg) : new ArrayList<>();
+            List<Library.Entry> loaded = new ArrayList<>();
+            if (on) {
+                String country = Guard.vpnLocation(this);
+                loaded = NetflixTopTen.load(this, country);
+                if (loaded.isEmpty()) loaded = Library.load(this, cfg);
+            }
+            final List<Library.Entry> list = loaded;
             ui.post(() -> {
                 if (generation != libraryGeneration || isDestroyed()) return;
                 boolean was = heroShown();
                 hero.setEntries(list);
+                heroSlot.setVisibility(heroShown() ? View.VISIBLE : View.GONE);
+                anchorHeroArtwork();
+                background();
                 if (was && !heroShown()) focusFirst();
                 // A shorter top keeps the clock, banner and apps row on one screen.
                 column.setPadding(0, heroShown() ? dp(26) : dp(40), 0, column.getPaddingBottom());
@@ -1134,6 +1274,7 @@ public final class Home extends Activity {
             if (Catalog.isApp(row.kind) && (!it.artRequested || wantsAppIcon() && it.icon == null)) loadArt(it);
         }
         row.setVisible(!shown.isEmpty());
+        if (row == apps) target.post(this::anchorHeroArtwork);
         adjustAppRowPosition();
         if (shown.isEmpty()) {
             // Nothing is left to come back to: forget the tile that used to be here.
@@ -1367,6 +1508,11 @@ public final class Home extends Activity {
     }
 
     private void background() {
+        boolean featured = heroShown();
+        wall.setVisibility(featured ? View.INVISIBLE : View.VISIBLE);
+        shade.setVisibility(featured ? View.INVISIBLE : View.VISIBLE);
+        tint.setVisibility(featured ? View.INVISIBLE : View.VISIBLE);
+        if (featured) root.setBackgroundColor(Color.BLACK);
         String mode = cfg.get(Config.BACKGROUND);
         boolean image = "image".equals(mode) || "adaptive-tint".equals(mode);
         File file = image ? cfg.wallpaper() : null;
@@ -1400,6 +1546,7 @@ public final class Home extends Activity {
         }
         int dim = Integer.parseInt(cfg.get(Config.DIM));
         shade.setBackgroundColor(file == null ? Color.TRANSPARENT : Color.argb(dim * 255 / 100, 0, 0, 0));
+        if (featured) root.setBackgroundColor(Color.BLACK);
         String key = file == null ? null : file.getPath() + ":" + file.lastModified();
         if (key == null ? wallKey == null : key.equals(wallKey)) return;
         wallKey = key;

@@ -115,8 +115,8 @@ restores the normal banners and App names behavior. Background and layout remain
 separate choices.
 
 **Icon shelf** uses each installed app's own rounded icon directly on the home canvas,
-with its name centered below. It shows at most three app icons across, leaving an open
-area on the right; more apps remain reachable by scrolling. A blue outline and slight
+with its name centered below. App icons use all available columns; additional apps
+continue on later rows or remain reachable by scrolling. A blue outline and slight
 scale change mark the focused icon. A hamburger button opens Options, Settings, and
 Apps › All apps in a frosted side panel. Pair it with the Midnight background for an
 Apple TV-inspired feel. Select it
@@ -190,9 +190,9 @@ again.
 list that maps apps to its pictures. Both are needed: themes and wallpaper apps answer
 the request too, but have no appfilter.
 
-**Nothing of the pack runs.** dumbtv home only reads its pictures, and still has no
-internet permission. You never need to open the pack's own app, and you can switch it
-off; its pictures still work:
+**Nothing of the pack runs.** dumbtv home only reads its pictures. Its separate
+internet access is used only by the optional Netflix Top 10 banner. You never need
+to open the pack's own app, and you can switch it off; its pictures still work:
 
 ```sh
 adb shell pm disable-user --user 0 <pack package>
@@ -288,18 +288,29 @@ adb push *.jpg /sdcard/Android/data/tv.dumbtv.home/files/wallpapers/
 
 ### Library banner
 
-A wide banner above the apps row for a few titles the owner picks: the picture
-cross-fades to the next title every 8 seconds with a slow zoom. Up from the apps row
-selects it, ◀ ▶ steps through the titles and OK opens the title in its app. Nothing is
-downloaded: the pictures and the list are pushed from a computer, like wallpapers.
+A wide banner above the apps row. When internet is available, dumbtv home reads
+Netflix's public weekly Top 10 shows page for the country reported by the VPN app,
+fetches each show's synopsis and large title artwork from Netflix's title page, and
+keeps a private on-device cache. It checks for updates every 12 hours and cross-fades
+titles every 30 seconds without zooming the artwork. The artwork scrolls with the app
+list while its fade continues into the black lower part of the page.
+Up from the apps row selects it, ◀ ▶ steps through the titles and OK opens the title
+in Netflix. The cached list remains available if the network is offline. If Netflix's
+page cannot be read, the optional hand-curated library below is used instead.
+
+This feature adds Android's normal internet permission. Its requests go to Netflix's
+Tudum Top 10 pages, Netflix title pages and Netflix's image hosts; rankings are weekly
+and depend on the country reported by the VPN app. Netflix does not provide a documented
+public API for this page, so a site redesign can temporarily prevent refreshes; the last
+cached list is retained in that case.
 
 `library/library.conf` in the settings folder lists one title per line, and the
 pictures sit beside it:
 
 ```
-# image | title | app package | deep link (optional) | key=value extras (optional)
-castle.jpg   | Castle   | com.hulu.plus     | https://www.hulu.com/series/castle-30fb4e12-5a72-4fe6-85ff-ddb5e88d1a65
-seinfeld.jpg | Seinfeld | com.netflix.ninja | https://www.netflix.com/title/70153373
+# image | title | app package | deep link (optional) | key=value extras (optional) | description (optional)
+castle.jpg | Castle | com.hulu.plus | https://www.hulu.com/series/castle-30fb4e12-5a72-4fe6-85ff-ddb5e88d1a65 || A detective returns to her hometown and investigates unusual crimes.
+seinfeld.jpg | Seinfeld | com.netflix.ninja | https://www.netflix.com/title/70153373 || Four friends navigate everyday life in New York City.
 ```
 
 - The deep link is sent to that app only. When the app does not answer it, the app
@@ -403,14 +414,16 @@ opened.
 
 Needs JDK 17 and the Android SDK (`platforms;android-25`, `build-tools`). There is
 no Gradle: `build.sh` runs aapt2, javac, d8, zipalign and apksigner directly, and
-compiles against Android 7.1 so one APK runs on Fire OS 6, 7 and 8.
+compiles against Android 7.1 so the launcher runs on Fire OS 6, 7 and 8. It also builds
+a small separate `dumbtv launcher` app because some Fire TV versions hide the package
+registered as HOME from their app list; that shortcut only opens the main launcher.
 
 ```sh
 brew install openjdk@17
 brew install --cask android-commandlinetools
 sdkmanager "platforms;android-25" "build-tools;34.0.0"
-./launcher/build.sh              # launcher/build/dumbtv-home.apk
-./launcher/install.sh --build    # build, install, take over HOME
+./launcher/build.sh              # dumbtv-home.apk and dumbtv-returnhome.apk
+./launcher/install.sh --build    # build and install both, take over HOME
 ```
 
 On Linux, set `ANDROID_HOME`; `build.sh` finds a JDK 17 in
@@ -419,7 +432,8 @@ because build-tools 34's `d8` has crashed on classes from newer JDKs.
 
 Your build is signed with a key `build.sh` creates on first run, and Android will
 not update the release with it or the other way round. `install.sh` says so; back
-up `home.conf`, then `adb uninstall tv.dumbtv.home`.
+up `home.conf`, then `adb uninstall tv.dumbtv.home`. `install.sh --undo` leaves the
+return shortcut available; the full `scripts/restore.sh` removes it.
 
 ## Diagnostics
 
@@ -454,7 +468,7 @@ Delete both to stop.
 | `src/.../Guard.java` | the Fire OS 7 and 8 HOME takeover |
 | `src/.../Keeper.java` | the Fire OS 6 HOME takeover |
 | `src/.../Recent.java` | when each app was last opened, for App order › Recently used |
-| `src/.../Hero.java` | the library banner: cross-fade, slow zoom, ◀ ▶ and OK |
+| `src/.../Hero.java` | the library banner: cross-fade, scroll-linked artwork, ◀ ▶ and OK |
 | `src/.../Library.java` | reads `library/library.conf` and opens a title in its app |
 | `src/.../BootReceiver.java` | restarts the Keeper after a boot or an update |
 | `build.sh` | aapt2, javac, d8, zipalign, apksigner |
@@ -472,7 +486,8 @@ Delete both to stop.
 
 1. Bump `VERSION`, `VERSION_CODE` and `VERSION_NAME` in `version.env`.
 2. `./build.sh`, copy `build/dumbtv-home.apk` to `build/dumbtv-home-<VERSION>.apk`,
-   and put its SHA-256 in `version.env`.
+   and put its SHA-256 in `version.env`. `install.sh` builds the small return shortcut
+   from source when it is not cached.
 3. Upload it as `dumbtv-home.apk` to a release tagged `launcher-v<VERSION>`.
 4. `./launcher/release-check.sh` fails if the tag, the APK and the hash disagree.
    CI runs `--manifest` on every push.

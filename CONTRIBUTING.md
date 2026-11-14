@@ -61,9 +61,9 @@ The rules the code keeps, and that a change must keep too:
   touched.
 - Amazon packages are disabled, never uninstalled.
 - No app a person uses is removed unless they named it.
-- On Fire OS 7 and 8 the launcher declares boot-restart and wake-lock permissions;
-  both are granted without a prompt, and it has no internet access. CI enforces
-  the permission set.
+- On Fire OS 7 and 8 the launcher declares internet, boot-restart and wake-lock
+  permissions. Internet is used only for the Netflix Top 10 banner when enabled;
+  the normal permissions are granted without a prompt. CI enforces this set.
 - Every step can be undone with `scripts/restore.sh`.
 
 Test on a real TV, say which one and which build in the pull request, and run the

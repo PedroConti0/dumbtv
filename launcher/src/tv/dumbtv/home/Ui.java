@@ -23,8 +23,8 @@ final class Ui {
     static final int HOME_CARD_BOTTOM = 0xFF111724;
     static final int HOME_SECONDARY = 0xFFB5C0D0;
     static final int HOME_ACCENT = 0xFF3D8BFF;
-    static final int CLOCK_START = 0xFFF7FAFF;
-    static final int CLOCK_END = 0xFFBBD2FF;
+    static final int CLOCK_START = 0xFFFFFFFF;
+    static final int CLOCK_END = 0xFFFFFFFF;
     static final int CLOCK_DATE = 0xFFCBD5E5;
     static final int DIALOG = android.R.style.Theme_DeviceDefault_Dialog_Alert;
     static final Typeface LIGHT = Typeface.create("sans-serif-light", Typeface.NORMAL);
@@ -96,12 +96,18 @@ final class Ui {
         return d;
     }
 
-    /** Translucent functional chrome for the paired header controls. */
-    static GradientDrawable frostedPanel(Context c, float radius) {
-        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0xF02A303A, 0xF0181C24});
+    /** Dark translucent chrome whose upper tint is sampled from the active hero image. */
+    static GradientDrawable frostedPanel(Context c, float radius, int posterColor) {
+        int top = Color.rgb(Color.red(posterColor) * 58 / 100,
+                Color.green(posterColor) * 58 / 100, Color.blue(posterColor) * 58 / 100);
+        int middle = Color.rgb(Color.red(posterColor) * 29 / 100,
+                Color.green(posterColor) * 29 / 100, Color.blue(posterColor) * 29 / 100);
+        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {Color.argb(0xE8, Color.red(top), Color.green(top), Color.blue(top)),
+                        Color.argb(0xEB, Color.red(middle), Color.green(middle), Color.blue(middle)),
+                        0xF0111316});
         d.setCornerRadius(dp(c, radius));
-        d.setStroke(dp(c, 1), 0x48FFFFFF);
+        d.setStroke(dp(c, 1), 0x25FFFFFF);
         return d;
     }
 
@@ -115,6 +121,15 @@ final class Ui {
         v.setTextColor(new ColorStateList(new int[][] {
                 {android.R.attr.state_focused}, {android.R.attr.state_hovered}, {}
         }, new int[] {0xFF111318, 0xFF111318, Color.WHITE}));
+    }
+
+    /** A quiet translucent highlight for long text over the moving hero artwork. */
+    static void frostedHoverStyle(TextView v, float radius) {
+        StateListDrawable bg = new StateListDrawable();
+        bg.addState(new int[] {android.R.attr.state_focused}, round(0x50FFFFFF, radius));
+        bg.addState(new int[] {android.R.attr.state_hovered}, round(0x50FFFFFF, radius));
+        bg.addState(new int[0], round(Color.TRANSPARENT, radius));
+        v.setBackground(bg);
     }
 
     /** Accent fill when focused, a faint fill otherwise. */

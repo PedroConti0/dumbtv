@@ -49,7 +49,7 @@ if [[ $DNSFILTER == 1 ]]; then
   note "install a DNS filter that blocks Amazon telemetry$([[ $ALEXA == 0 ]] && printf ', Alexa') and the OTA servers"
 fi
 if [[ $LAUNCHER == 1 ]]; then
-  note "replace the home screen with dumbtv home (this repo's own launcher, no internet access)"
+  note "replace the home screen with dumbtv home (Netflix Top 10 artwork downloads when its banner is enabled)"
 fi
 note "reboot twice (about 5 minutes)"
 

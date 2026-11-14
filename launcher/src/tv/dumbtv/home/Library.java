@@ -22,33 +22,35 @@ import java.util.Map;
  * next to home.conf, pushed over adb with the artwork beside it, one title per line:
  *
  * <pre>
- * image | title | package | deep link (optional) | key=value extras (optional)
- * stranger-things.jpg | Stranger Things | com.netflix.ninja | https://www.netflix.com/title/80057281 | source=30
+ * image | title | package | deep link (optional) | key=value extras (optional) | description (optional)
+ * couple-of-lies.jpg | A Couple of Lies | com.netflix.ninja | https://www.netflix.com/title/81944880 || A holiday home swap between Sweden and Sicily unravels into a web of secrets.
  * </pre>
  *
- * The launcher has no internet permission, so nothing here is downloaded.
+ * This is the offline, hand-curated fallback; dynamic Netflix titles are handled separately.
  */
 final class Library {
     static final String DIR = Config.LIBRARY_DIR;
     static final String FILE = Config.LIBRARY_FILE;
 
     static final class Entry {
-        final String image, title, pkg, uri;
+        final String image, title, pkg, uri, description;
         final Map<String, String> extras;
         File file;
         CharSequence appLabel;
 
-        Entry(String image, String title, String pkg, String uri, Map<String, String> extras) {
+        Entry(String image, String title, String pkg, String uri, Map<String, String> extras,
+                String description) {
             this.image = image;
             this.title = title;
             this.pkg = pkg;
             this.uri = uri;
             this.extras = extras;
+            this.description = description;
         }
 
         /** Same title, same picture on disk: nothing to reload. */
         String key() {
-            return image + "|" + title + "|" + pkg + "|" + uri + "|" + extras
+            return image + "|" + title + "|" + pkg + "|" + uri + "|" + extras + "|" + description
                     + (file == null ? "" : "|" + file.lastModified());
         }
     }
@@ -73,7 +75,8 @@ final class Library {
                     if (eq > 0) extras.put(kv.substring(0, eq).trim(), kv.substring(eq + 1).trim());
                 }
             }
-            out.add(new Entry(image, title.isEmpty() ? image : title, pkg, uri, extras));
+            String description = f.length > 5 ? f[5].trim() : "";
+            out.add(new Entry(image, title.isEmpty() ? image : title, pkg, uri, extras, description));
         }
         return out;
     }

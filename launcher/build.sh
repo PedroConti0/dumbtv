@@ -121,6 +121,52 @@ else
   "$BT/apksigner" verify build/dumbtv-home.apk
 fi
 
+# Amazon Home filters the package currently registered as HOME from its app drawer on some
+# Fire OS builds. A tiny second package keeps a regular visible app entry for returning to us.
+ENTRY_WORK="$WORK/returnhome"
+mkdir -p "$ENTRY_WORK/gen" "$ENTRY_WORK/classes"
+"$BT/aapt2" compile --dir returnhome/res -o "$ENTRY_WORK/res.zip"
+"$BT/aapt2" link -I "$JAR" --manifest returnhome/AndroidManifest.xml "$ENTRY_WORK/res.zip" \
+  --min-sdk-version "$MIN_SDK" --target-sdk-version 28 \
+  --version-code "$VERSION_CODE" --version-name "$VERSION_NAME" \
+  --java "$ENTRY_WORK/gen" -o "$ENTRY_WORK/app.apk"
+find returnhome/src "$ENTRY_WORK/gen" -name '*.java' > "$ENTRY_WORK/sources.txt"
+if [[ $WINDOWS == 1 ]]; then
+  while IFS= read -r path; do printf '"%s"\n' "$(cygpath -am "$path")"; done \
+    < "$ENTRY_WORK/sources.txt" > "$ENTRY_WORK/sources.windows.txt"
+  ENTRY_SOURCES="$ENTRY_WORK/sources.windows.txt"
+else
+  ENTRY_SOURCES="$ENTRY_WORK/sources.txt"
+fi
+"$JAVA_HOME/bin/javac" --release 8 -Xlint:all -Xlint:-options -Werror -encoding UTF-8 \
+  -classpath "$JAR" -d "$ENTRY_WORK/classes" @"$ENTRY_SOURCES"
+find "$ENTRY_WORK/classes" -name '*.class' > "$ENTRY_WORK/classes.txt"
+if [[ $WINDOWS == 1 ]]; then
+  while IFS= read -r path; do cygpath -am "$path"; done \
+    < "$ENTRY_WORK/classes.txt" > "$ENTRY_WORK/classes.windows.txt"
+  "$JAVA_HOME/bin/java" -cp "$BT/lib/d8.jar" com.android.tools.r8.D8 \
+    --release --min-api "$MIN_SDK" --lib "$JAR" --output "$ENTRY_WORK" \
+    @"$ENTRY_WORK/classes.windows.txt"
+else
+  "$BT/d8" --release --min-api "$MIN_SDK" --lib "$JAR" --output "$ENTRY_WORK" \
+    @"$ENTRY_WORK/classes.txt"
+fi
+(cd "$ENTRY_WORK" && zip -q -X app.apk classes.dex)
+"$BT/zipalign" -f -p 4 "$ENTRY_WORK/app.apk" "$ENTRY_WORK/aligned.apk"
+if [[ $WINDOWS == 1 ]]; then
+  "$JAVA_HOME/bin/java" -cp "$BT/lib/apksigner.jar" com.android.apksigner.ApkSignerTool sign \
+    --ks "$KEYSTORE" --ks-pass "pass:$KEYPASS" --key-pass "pass:$KEYPASS" \
+    --out build/dumbtv-returnhome.apk "$ENTRY_WORK/aligned.apk"
+  "$JAVA_HOME/bin/java" -cp "$BT/lib/apksigner.jar" com.android.apksigner.ApkSignerTool verify \
+    build/dumbtv-returnhome.apk
+else
+  "$BT/apksigner" sign --ks "$KEYSTORE" --ks-pass "pass:$KEYPASS" --key-pass "pass:$KEYPASS" \
+    --out build/dumbtv-returnhome.apk "$ENTRY_WORK/aligned.apk"
+  "$BT/apksigner" verify build/dumbtv-returnhome.apk
+fi
+
 perms=$("$BT/aapt2" dump permissions build/dumbtv-home.apk | grep -c 'uses-permission' || true)
 printf 'built build/dumbtv-home.apk  %s bytes  %s uses-permission entries\n' \
   "$(wc -c < build/dumbtv-home.apk | tr -d ' ')" "$perms"
+printf 'built build/dumbtv-returnhome.apk  %s bytes\n' \
+  "$(wc -c < build/dumbtv-returnhome.apk | tr -d ' ')"

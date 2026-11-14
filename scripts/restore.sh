@@ -111,6 +111,13 @@ else
   ADB=$ADB ADB_SERIAL=$SERIAL "$ROOT/launcher/install.sh" --undo >/dev/null ||
     die "could not hand HOME back to Amazon's launcher; run ./launcher/install.sh --undo"
 fi
+if [[ $DRY_RUN == 0 ]] && present tv.dumbtv.returnhome; then
+  acmd pm uninstall tv.dumbtv.returnhome >/dev/null 2>&1 ||
+    die "could not remove the dumbtv app-list shortcut"
+  note "removed the dumbtv launcher shortcut"
+elif [[ $DRY_RUN == 1 ]]; then
+  note "[dry-run] remove tv.dumbtv.returnhome if installed"
+fi
 note "always_on_vpn_app cleared, HOME handed back to Amazon's launcher (apps stay installed)"
 
 step "settings"

@@ -13,7 +13,7 @@ public final class LibraryTest {
         List<Library.Entry> got = Library.parse(Arrays.asList(
                 "# comment",
                 "",
-                "st.jpg | Stranger Things | com.netflix.ninja | https://www.netflix.com/title/80057281 | source=30",
+                "st.jpg | Stranger Things | com.netflix.ninja | https://www.netflix.com/title/80057281 | source=30 | A small-town mystery brings strange events to light.",
                 "moana.jpg|Moana|com.disney.disneyplus",
                 "  bare.png | | com.hulu.plus | ",
                 "too | few",
@@ -28,8 +28,11 @@ public final class LibraryTest {
                 && st.pkg.equals("com.netflix.ninja")
                 && st.uri.equals("https://www.netflix.com/title/80057281"), "full line");
         check("30".equals(st.extras.get("source")), "extra parsed");
+        check(st.description.equals("A small-town mystery brings strange events to light."),
+                "description parsed");
         Library.Entry moana = got.get(1);
-        check(moana.uri.isEmpty() && moana.extras.isEmpty(), "no link, no extras");
+        check(moana.uri.isEmpty() && moana.extras.isEmpty() && moana.description.isEmpty(),
+                "no link, extras or description");
         check(got.get(2).title.equals("bare.png"), "empty title falls back to the file name");
         Library.Entry x = got.get(3);
         check(x.extras.size() == 2 && "2".equals(x.extras.get("b")), "extras trimmed, junk skipped");
