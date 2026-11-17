@@ -5,6 +5,10 @@ report/
 dumbtv.conf
 launcher/build/
 launcher/*.keystore
+/platform-tools/
+/.local/
+*.apk
+*.apk.idsig
 video/
 __pycache__/
 *.pyc

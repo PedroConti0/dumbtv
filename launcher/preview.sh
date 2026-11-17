@@ -11,11 +11,8 @@ SERIAL=${PREVIEW_SERIAL:-emulator-5556}
   exit 2
 }
 
-if [[ -x "$PWD/../platform-tools/adb.exe" ]]; then
-  ADB=${ADB:-$PWD/../platform-tools/adb.exe}
-else
-  ADB=${ADB:-adb}
-fi
+ADB=${ADB:-adb}
+command -v "$ADB" >/dev/null || { echo "error: adb not found — install Android platform-tools" >&2; exit 1; }
 adb_() { MSYS_NO_PATHCONV=1 "$ADB" -s "$SERIAL" "$@"; }
 
 state=$(adb_ get-state 2>/dev/null || true)

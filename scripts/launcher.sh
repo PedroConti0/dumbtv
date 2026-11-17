@@ -19,7 +19,7 @@ PKG=tv.dumbtv.home
 
 step "plan"
 note "install dumbtv home: open source; internet used only for Netflix Top 10 when the banner is enabled; no ad ID"
-note "the prebuilt APK comes from this repo's GitHub release and is checksum-verified"
+note "the prebuilt APK comes from the upstream GitHub release and is checksum-verified"
 if [[ $SDK -lt 28 ]]; then
   note "take over HOME: Keeper (UsageStats + moveTaskToFront, no accessibility)"
 else

@@ -74,8 +74,12 @@ no root:
 
 ## Quick start
 
-You need a computer with [`adb`](https://developer.android.com/tools/releases/platform-tools)
-and about ten minutes. On the TV, turn on ADB: **Settings → My Fire TV → About**,
+You need Bash, `curl`, and `adb` from Android SDK Platform-Tools. Add the
+Platform-Tools folder to your PATH and check it with `adb version`.
+On Windows, use Git Bash with the Windows download, or WSL with the Linux download.
+[Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
+
+On the TV, turn on ADB under **Settings → My Fire TV → About**,
 press OK on the device name 7 times, then **Developer Options → ADB debugging**.
 The TV's IP address is under **Settings → My Fire TV → About → Network** (on a
 Fire TV Edition television: **Settings → Network**, then the connected network).
@@ -91,7 +95,7 @@ below.
 **By hand:**
 
 ```sh
-git clone https://github.com/humblemuzzu/dumbtv && cd dumbtv
+git clone https://github.com/PedroConti0/dumbtv && cd dumbtv
 adb connect <tv-ip>:5555        # press Allow on the TV
 ./scripts/preflight.sh          # what the TV is and what would change; changes nothing
 ./scripts/configure.sh          # a few questions
@@ -141,23 +145,35 @@ and what you lose without it.
 |---|---|---|
 | ![Rows layout](docs/assets/screens/home.png) | ![Grid layout](docs/assets/screens/grid.png) | ![Options](docs/assets/screens/options.png) |
 
-A home screen that shows your apps and your HDMI inputs, and nothing else. Accent
-colours, tile sizes, rows or a grid, wallpapers, adaptive backgrounds, renaming and
-hiding, and the icons of an icon pack you install, all from the remote. HOME lands on
-it in a fraction of a second.
+The launcher shows your apps and HDMI inputs with customizable rows, a grid,
+wallpapers and icon packs. The optional Library banner fetches Netflix Top 10
+rankings, descriptions and artwork. The launcher can also restart the DNS filter
+on supported Fire OS versions.
 
-It is plain Java with no libraries. Its internet access is used only to fetch the
-Netflix Top 10 list, descriptions and poster artwork when the Library banner is on.
-On Fire OS 7 and 8 it also uses run-at-startup to restart the DNS filter when Android kills it. It works
-on its own, without the rest of dumbtv:
+The quick-start scripts install the checksum-verified upstream launcher release.
+To install the launcher from this checkout, including the current UI and the
+shortcut back to dumbtv home from Amazon's app list, build both APKs from source.
 
 ```sh
 adb connect <tv-ip>:5555
-./launcher/install.sh
+./launcher/install.sh --build
 ```
 
-[launcher/README.md](launcher/README.md) covers the settings, wallpapers, icon
-packs and how it takes over the HOME button.
+The build uses JDK 17, Android SDK Platform 25, Build Tools 34.0.0, and `zip`.
+The launcher uses the Android SDK and Java standard library.
+[Build instructions](launcher/README.md#build-it-yourself)
+
+## Dependencies
+
+| Dependency | Used for |
+|---|---|
+| Android SDK Platform-Tools | ADB connection and installation |
+| personalDNSfilter | Optional on-TV DNS filtering. The script downloads its APK from F-Droid. |
+| HaGeZi Amazon tracker list | Downloaded when setting up DNS filtering, alongside the rules in [`data/blocklists/`](data/blocklists/) |
+| SmartTube | Optional YouTube replacement. The script downloads its APK from the SmartTube release. |
+| Python 3 and [`requirements-dev.txt`](requirements-dev.txt) | Offline tests and catalog validation |
+
+The [package lists](data/) used for Fire OS cleanup are included in this checkout.
 
 ## Tested on
 
@@ -358,6 +374,5 @@ not affiliated with or endorsed by Amazon. Use it at your own risk.
 Scripts, docs and the launcher are [MIT](LICENSE). The device catalog is
 [CC BY-SA 4.0](catalog/LICENSE).
 
-dumbtv bundles none of these, but downloads them when you ask for them:
-personalDNSfilter (GPL-2.0) from F-Droid, HaGeZi's Amazon tracker list (GPL-3.0),
-and SmartTube (MIT) from its own releases.
+Optional downloads retain their own licences. personalDNSfilter uses GPL-2.0,
+HaGeZi's Amazon tracker list uses GPL-3.0, and SmartTube uses MIT.

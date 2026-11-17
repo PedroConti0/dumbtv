@@ -85,6 +85,7 @@ work does not belong there.
 CI runs these on every pull request. Run them before you push:
 
 ```sh
+python3 -m pip install -r requirements-dev.txt
 python3 catalog/validate.py                 # catalog files
 python3 -m unittest discover -s tests -v    # scripts, against a pretend TV
 for f in scripts/*.sh launcher/*.sh; do bash -n "$f"; done

@@ -6,10 +6,9 @@ A home screen for Fire TV that does one job: show your apps and your HDMI inputs
   <img src="../docs/assets/screens/home.png" alt="dumbtv home: a clock, an Apps row and an Inputs row" width="720">
 </p>
 
-- **107 KB.** Plain Java and Android views. No AndroidX, Kotlin, Compose, Play
-  Services or any other library.
-- **No network.** There is no `INTERNET` permission, so Android will not let it
-  open a connection.
+- **Plain Java and Android views.** The launcher uses the Android SDK and Java standard library.
+- **Optional Netflix Top 10 banner.** With the Library banner enabled, the launcher
+  uses `INTERNET` to fetch rankings, descriptions and artwork.
 - **No permission prompts on Fire OS 7 and 8.** The launcher declares
   `RECEIVE_BOOT_COMPLETED` so personalDNSfilter can restart after boot and
   `WAKE_LOCK` to keep Fire TV in its screensaver while home is idle. Fire OS 6
@@ -33,11 +32,14 @@ folder. The launcher imports it once the next time home starts. Keep this file
 updated from **Options › Export settings** when you change preferences on the TV;
 that export is readable over adb even on Fire OS 8.
 
-The APK comes from this repository's
+The prebuilt APK comes from the upstream project's
 [releases](https://github.com/humblemuzzu/dumbtv/releases/latest), and `install.sh`
 refuses it if the checksum differs from the one in `version.env`. Installing the
 APK by hand works, but HOME only switches over once `install.sh` (or
 `scripts/launcher.sh`) has set up the HOME hook described below.
+
+Use `./launcher/install.sh --build` for the code in this checkout. That command
+also installs the shortcut that opens dumbtv home from Amazon's app list.
 
 Undo: `./launcher/install.sh --undo` gives HOME back to Amazon's launcher.
 
@@ -412,7 +414,7 @@ opened.
 
 ## Build it yourself
 
-Needs JDK 17 and the Android SDK (`platforms;android-25`, `build-tools`). There is
+Needs JDK 17, `zip` and the Android SDK (`platforms;android-25`, `build-tools;34.0.0`). There is
 no Gradle: `build.sh` runs aapt2, javac, d8, zipalign and apksigner directly, and
 compiles against Android 7.1 so the launcher runs on Fire OS 6, 7 and 8. It also builds
 a small separate `dumbtv launcher` app because some Fire TV versions hide the package
@@ -482,12 +484,12 @@ Delete both to stop.
 | `tests/AppSectionsTest.java` | pinned and All apps selection tests, run by CI |
 | `tests/IconMatchTest.java` | host-side test for the icon pack text rules, run by CI |
 
-## Releasing
+## Publishing the upstream launcher
 
 1. Bump `VERSION`, `VERSION_CODE` and `VERSION_NAME` in `version.env`.
 2. `./build.sh`, copy `build/dumbtv-home.apk` to `build/dumbtv-home-<VERSION>.apk`,
-   and put its SHA-256 in `version.env`. `install.sh` builds the small return shortcut
-   from source when it is not cached.
+   and put its SHA-256 in `version.env`. Source installs build and install the
+   companion shortcut alongside the main launcher.
 3. Upload it as `dumbtv-home.apk` to a release tagged `launcher-v<VERSION>`.
 4. `./launcher/release-check.sh` fails if the tag, the APK and the hash disagree.
    CI runs `--manifest` on every push.
